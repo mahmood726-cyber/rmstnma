@@ -1,0 +1,68 @@
+Package: powerNMA
+Title: Comprehensive Network Meta-Analysis Suite with Time-Varying Methods
+Version: 1.0.0
+Authors@R: c(
+    person("NMA", "Research Group", email = "research@example.com", role = c("aut", "cre")),
+    person("Claude", "AI", role = "ctb")
+    )
+Description: A comprehensive framework for network meta-analysis combining time-varying
+    methods (RMST and milestone survival) with advanced NMA techniques including
+    transportability weighting, Bayesian inference, meta-regression with splines,
+    publication bias assessment, sensitivity analyses, and machine learning for
+    heterogeneity exploration. Features an integrated Shiny dashboard and extensive
+    development tools.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 4.0.0)
+Imports:
+    netmeta (>= 2.0.0),
+    survRM2,
+    survival,
+    ggplot2 (>= 3.3.0),
+    dplyr (>= 1.0.0),
+    tidyr (>= 1.0.0),
+    purrr,
+    tibble,
+    patchwork,
+    shiny (>= 1.7.0),
+    shinydashboard,
+    DT,
+    plotly,
+    readr,
+    methods,
+    stats,
+    utils,
+    grDevices
+Suggests:
+    gemtc,
+    coda,
+    multinma,
+    metafor,
+    clubSandwich,
+    splines,
+    weightr,
+    metasens,
+    meta,
+    ranger,
+    reshape2,
+    broom,
+    rmarkdown,
+    knitr,
+    future,
+    future.apply,
+    digest,
+    testthat (>= 3.0.0),
+    covr,
+    pkgdown,
+    devtools,
+    usethis,
+    roxygen2 (>= 7.0.0),
+    goodpractice,
+    lintr
+RoxygenNote: 7.3.1
+Roxygen: list(markdown = TRUE)
+VignetteBuilder: knitr
+URL: https://github.com/your-org/powerNMA
+BugReports: https://github.com/your-org/powerNMA/issues
