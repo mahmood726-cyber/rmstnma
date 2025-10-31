@@ -215,32 +215,75 @@ print.powernma_result <- function(x, ...) {
   cat("  powerNMA Analysis Results\n")
   cat("═══════════════════════════════════════════════════\n\n")
 
-  cat("Reference treatment:", x$ref_treatment, "\n")
-  cat("Effect measure (sm):", x$config$sm, "\n")
+  # Display mode information
+  mode <- x$mode %||% "unknown"
+  cat("Mode:", toupper(mode), "\n")
 
-  if (!is.null(x$results$main_nma)) {
-    cat(sprintf("Heterogeneity τ: %.4f\n", x$results$main_nma$tau))
-    cat(sprintf("I²: %.1f%%\n", x$results$main_nma$I2.random * 100))
+  if (mode == "standard") {
+    cat("Status: \u2713 VALIDATED - Suitable for systematic reviews\n")
+    cat("Based on:", x$based_on %||% "netmeta, gemtc", "\n")
+  } else if (mode == "experimental") {
+    cat("Status: \u26a0 EXPERIMENTAL - Research use only\n")
+    cat("Validation: See VALIDATION_PLAN.md\n")
   }
 
-  cat("\nAnalyses completed:\n")
-  components <- c(
-    "main_nma" = "Frequentist NMA",
-    "rmst_nma" = "Time-varying RMST NMA",
-    "milestone_nma" = "Milestone Survival NMA",
-    "bayesian" = "Bayesian NMA",
-    "metareg" = "Meta-regression",
-    "pet_peese" = "PET-PEESE bias assessment",
-    "ml" = "ML heterogeneity exploration"
-  )
+  cat("\n")
+  cat("Reference treatment:", x$ref_treatment %||% "Not specified", "\n")
 
-  for (comp in names(components)) {
-    status <- if (!is.null(x$results[[comp]])) "✓" else "✗"
-    cat(sprintf("  %s %s\n", status, components[comp]))
+  # Show method-specific information
+  if (mode == "standard") {
+    # Standard mode: show standard NMA info
+    if (!is.null(x$network)) {
+      cat(sprintf("Heterogeneity \u03c4: %.4f\n", x$network$tau))
+      cat(sprintf("I\u00b2: %.1f%%\n", x$network$I2 * 100))
+    }
+  } else {
+    # Experimental mode: show warnings if present
+    if (!is.null(x$warnings) && length(x$warnings) > 0) {
+      cat("\nWarnings:\n")
+      for (w in x$warnings[1:min(3, length(x$warnings))]) {
+        cat("  \u2022", w, "\n")
+      }
+      if (length(x$warnings) > 3) {
+        cat("  ... and", length(x$warnings) - 3, "more\n")
+      }
+    }
+  }
+
+  # Show completed analyses
+  cat("\nAnalyses completed:\n")
+
+  if (mode == "standard") {
+    components <- list(
+      network = "Frequentist NMA (netmeta)",
+      bayesian = "Bayesian NMA (gemtc)",
+      sensitivity = "Leave-one-out sensitivity",
+      geometry = "Network geometry",
+      inconsistency = "Inconsistency assessment"
+    )
+  } else {
+    components <- list(
+      network = "Standard NMA",
+      rmst = "Time-varying RMST NMA",
+      milestone = "Milestone Survival NMA",
+      transportability = "Transportability weighting",
+      publication_bias = "PET-PEESE bias assessment",
+      loto = "Leave-one-treatment-out",
+      multiverse = "Multiverse robustness"
+    )
+  }
+
+  for (comp_name in names(components)) {
+    status <- if (!is.null(x[[comp_name]])) "\u2713" else "\u2717"
+    cat(sprintf("  %s %s\n", status, components[[comp_name]]))
+  }
+
+  cat("\n")
+  if (mode == "experimental") {
+    cat("\u26a0 REMINDER: Experimental methods not validated for clinical use\n")
   }
 
   cat("\nUse summary(x) for detailed results\n")
-  cat("Use plot(x) to generate visualizations\n")
   invisible(x)
 }
 

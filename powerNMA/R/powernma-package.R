@@ -19,9 +19,9 @@
 #' \itemize{
 #'   \item \code{\link{simulate_nma_data}}: Generate example pairwise data
 #'   \item \code{\link{generate_example_ipd}}: Generate example IPD
-#'   \item \code{\link{reconstruct_ipd}}: Reconstruct IPD from KM curves
 #'   \item \code{\link{validate_ipd}}: Validate IPD structure
 #'   \item \code{\link{validate_nma_input}}: Validate pairwise data
+#'   \item \code{\link{make_pairwise_from_arms}}: Convert arm-level to pairwise data
 #' }
 #'
 #' @section Statistical Methods:
@@ -113,16 +113,6 @@
 #' }
 #'
 #' @section References:
-#'
-#' **Time-Varying Methods:**
-#' \itemize{
-#'   \item Guyot P, Ades AE, Ouwens MJ, Welton NJ (2012). Enhanced secondary
-#'   analysis of survival data: reconstructing the data from published
-#'   Kaplan-Meier survival curves. \emph{BMC Med Res Methodol} 12:9.
-#'
-#'   \item Wei Y, Royston P (2017). Reconstructing time-to-event data from
-#'   published Kaplan-Meier curves. \emph{Stata J} 17(4):786-802.
-#' }
 #'
 #' **Network Meta-Analysis:**
 #' \itemize{
