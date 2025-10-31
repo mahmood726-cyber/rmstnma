@@ -27,6 +27,17 @@ S3method(plot,nma_missing_data)
 S3method(print,cross_design_nma)
 S3method(plot,cross_design_nma)
 
+# Experimental methods (2024-2025)
+S3method(plot,rmst_nma)
+S3method(print,threshold_analysis)
+S3method(plot,threshold_analysis)
+S3method(print,itr_nma)
+S3method(predict,itr_nma)
+S3method(plot,itr_nma)
+S3method(print,bma_nma)
+S3method(summary,bma_nma)
+S3method(plot,bma_nma)
+
 # Core functions
 export(clean_nma_data)
 export(clear_powernma_cache)
@@ -62,6 +73,11 @@ export(multivariate_nma)
 export(handle_missing_data)
 export(recommend_missing_data_strategy)
 export(cross_design_synthesis)
+
+# Experimental methods (2024-2025)
+export(threshold_analysis)
+export(itr_from_nma)
+export(model_averaging_nma)
 
 # Systematic review
 export(generate_prisma_nma_checklist)
