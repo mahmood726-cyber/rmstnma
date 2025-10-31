@@ -91,6 +91,12 @@ export(model_averaging_nma)
 export(auto_standard_nma)
 export(auto_experimental_nma)
 
+# Interactive GUI
+export(launch_powernma_gui)
+export(powernma_gui)
+export(check_gui_dependencies)
+export(install_gui_dependencies)
+
 # Systematic review
 export(generate_prisma_nma_checklist)
 export(create_network_diagram)
