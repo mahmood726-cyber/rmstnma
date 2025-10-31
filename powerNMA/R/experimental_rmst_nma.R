@@ -43,7 +43,8 @@
 #' @param data_type Type of data: "ipd" (individual participant data) or
 #'   "aggregate" (pre-calculated RMST values)
 #' @param reference Reference treatment for comparisons. If NULL, uses first treatment.
-#' @param method Analysis method: "frequentist" or "bayesian"
+#' @param method Analysis method. Currently only "frequentist" is supported.
+#'   Bayesian methods require JAGS/Stan and are not yet implemented.
 #' @param covariate Optional covariate name for meta-regression (IPD only)
 #' @param tau_common Logical. Should tau be common across all studies? Default TRUE.
 #' @param ... Additional arguments passed to netmeta or JAGS models
@@ -132,14 +133,18 @@ rmst_nma <- function(data,
                      tau = NULL,
                      data_type = c("aggregate", "ipd"),
                      reference = NULL,
-                     method = c("frequentist", "bayesian"),
+                     method = "frequentist",
                      covariate = NULL,
                      tau_common = TRUE,
                      ...) {
 
   # Argument checking
   data_type <- match.arg(data_type)
-  method <- match.arg(method)
+
+  # Only frequentist method currently supported
+  if (method != "frequentist") {
+    stop("Only method='frequentist' is currently supported. Bayesian methods require JAGS/Stan and are not yet implemented.")
+  }
 
   # Experimental warning
   message("=============================================================")
@@ -189,11 +194,8 @@ rmst_nma <- function(data,
   }
 
   # Run network meta-analysis on RMST differences
-  if (method == "frequentist") {
-    nma_result <- fit_frequentist_rmst_nma(rmst_data, reference, tau, ...)
-  } else {
-    nma_result <- fit_bayesian_rmst_nma(rmst_data, reference, tau, ...)
-  }
+  # Only frequentist method currently supported
+  nma_result <- fit_frequentist_rmst_nma(rmst_data, reference, tau, ...)
 
   # Extract results
   rmst_estimates <- extract_rmst_estimates(nma_result, rmst_data, reference)
@@ -450,21 +452,6 @@ create_pairwise_rmst <- function(rmst_data) {
   }
 
   return(pairs)
-}
-
-
-#' Fit Bayesian RMST-based NMA
-#' @keywords internal
-fit_bayesian_rmst_nma <- function(rmst_data, reference, tau, ...) {
-
-  message("Bayesian RMST-NMA requires JAGS/Stan - using frequentist approximation")
-
-  # For now, fall back to frequentist
-  # Full Bayesian implementation would use JAGS/Stan with RMST likelihood
-  result <- fit_frequentist_rmst_nma(rmst_data, reference, tau, ...)
-  result$note <- "Bayesian RMST-NMA requires JAGS/Stan - frequentist approximation used"
-
-  return(result)
 }
 
 

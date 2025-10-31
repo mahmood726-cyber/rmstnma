@@ -49,10 +49,11 @@
 #' @param reference Reference treatment for comparisons
 #' @param prior_model_probs Optional vector of prior model probabilities.
 #'   If NULL, uses equal priors.
-#' @param heterogeneity_priors For Bayesian models, heterogeneity prior specs
+#' @param heterogeneity_priors Reserved for future Bayesian implementation
 #' @param sm Summary measure (e.g., "MD", "SMD", "OR", "RR")
-#' @param method Analysis method: "frequentist" or "bayesian"
-#' @param ... Additional arguments passed to netmeta or JAGS
+#' @param method Analysis method. Currently only "frequentist" is supported.
+#'   Bayesian methods require JAGS/Stan and are not yet implemented.
+#' @param ... Additional arguments passed to netmeta
 #'
 #' @return An object of class "bma_nma" containing:
 #'   \item{model_results}{List of results from each model}
@@ -127,7 +128,7 @@ model_averaging_nma <- function(data,
                                 prior_model_probs = NULL,
                                 heterogeneity_priors = NULL,
                                 sm = "MD",
-                                method = c("frequentist", "bayesian"),
+                                method = "frequentist",
                                 ...) {
 
   # Experimental warning
@@ -139,7 +140,11 @@ model_averaging_nma <- function(data,
 
   # Argument checking
   weighting <- match.arg(weighting)
-  method <- match.arg(method)
+
+  # Only frequentist method currently supported
+  if (method != "frequentist") {
+    stop("Only method='frequentist' is currently supported. Bayesian methods require JAGS/Stan and are not yet implemented.")
+  }
 
   # Validate data
   required_cols <- c("study", "treat1", "treat2", "TE", "seTE")
