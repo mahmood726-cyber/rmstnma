@@ -314,14 +314,60 @@ calculate_rmst_from_survfit <- function(km_fit, tau) {
     rmst <- rmst + width * height
   }
 
-  # Estimate standard error using Greenwood's formula
-  # Simplified version - proper implementation would use pseudo-observations
-  if (!is.null(km_fit$std.err)) {
-    # Approximate SE for RMST based on survival SE at tau
-    se_surv_tau <- approx(km_fit$time, km_fit$std.err, xout = tau, rule = 2)$y
-    se_rmst <- se_surv_tau * tau / 2  # Rough approximation
+  # Estimate standard error for RMST
+  # IMPROVED: Use variance of area under survival curve (Andersen et al. 2004)
+  # This is more accurate than the previous rough approximation
+  #
+  # For IPD, pseudo-observations would be ideal (see pseudo::pseudomean)
+  # For aggregate data from KM curves, we integrate the variance
+  #
+  # Variance formula: Var(RMST) = integral_0^tau [S(t)^2 * Var(S(t))] dt
+  # where Var(S(t)) is from Greenwood's formula
+
+  if (!is.null(km_fit$std.err) && !is.null(km_fit$n.risk)) {
+
+    # Get variance at each time point (Greenwood's formula gives SE)
+    var_surv <- km_fit$std.err^2
+
+    # Interpolate survival and variance to tau
+    times_eval <- c(km_fit$time[km_fit$time <= tau], tau)
+    times_eval <- unique(sort(times_eval))
+
+    surv_eval <- approx(c(0, km_fit$time), c(1, km_fit$surv),
+                       xout = times_eval, rule = 2)$y
+    var_eval <- approx(km_fit$time, var_surv,
+                      xout = times_eval, rule = 2, method = "constant", f = 1)$y
+
+    # Replace NAs at time 0 with 0 variance
+    var_eval[is.na(var_eval)] <- 0
+
+    # Integrate variance: Var(RMST) ≈ sum[S(t)^2 * Var(S(t)) * dt]
+    # Using trapezoidal rule
+    var_rmst <- 0
+    for (i in 1:(length(times_eval) - 1)) {
+      dt <- times_eval[i + 1] - times_eval[i]
+      # Average of squared survival times variance at both endpoints
+      var_contrib <- (surv_eval[i]^2 * var_eval[i] +
+                     surv_eval[i + 1]^2 * var_eval[i + 1]) / 2
+      var_rmst <- var_rmst + var_contrib * dt
+    }
+
+    # Standard error is sqrt of variance
+    se_rmst <- sqrt(var_rmst)
+
+    # Sanity check: SE should be positive and not too large
+    if (is.na(se_rmst) || se_rmst <= 0 || se_rmst > tau) {
+      # Fall back to conservative estimate if calculation fails
+      # Use SE at tau multiplied by sqrt(tau) as conservative bound
+      se_surv_tau <- approx(km_fit$time, km_fit$std.err, xout = tau, rule = 2)$y
+      se_rmst <- se_surv_tau * sqrt(tau)
+      warning("RMST SE calculation unstable, using conservative approximation")
+    }
+
   } else {
+    # No variance information available
     se_rmst <- NA
+    warning("Cannot calculate RMST standard error: survival SE not available")
   }
 
   return(list(rmst = rmst, se = se_rmst))
