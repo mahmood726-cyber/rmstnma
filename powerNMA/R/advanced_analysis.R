@@ -241,17 +241,257 @@ run_multiverse <- function(data, ref_treatment, sm = "HR") {
 #' @param weights Named vector of study weights
 #' @return Diagnostic statistics
 #' @export
-transportability_diagnostics <- function(weights) {
-  w <- as.numeric(weights)
+transportability_diagnostics <- function(data, target_population, weights,
+                                         covariates = NULL) {
+  # Extract weights if it's a tibble from compute_transport_weights()
+  if (is.data.frame(weights) && "weight" %in% names(weights)) {
+    weight_vec <- weights$weight
+    study_labels <- weights$studlab
+  } else {
+    weight_vec <- as.numeric(weights)
+    study_labels <- if (!is.null(names(weights))) names(weights) else seq_along(weights)
+  }
 
-  tibble::tibble(
-    effective_sample_size = sum(w)^2 / sum(w^2),
-    min_weight = min(w),
-    max_weight = max(w),
-    mean_weight = mean(w),
-    sd_weight = stats::sd(w),
-    cv_weight = stats::sd(w) / mean(w)
+  # Identify covariates for balance assessment
+  if (is.null(covariates)) {
+    covariates <- intersect(names(target_population), names(data))
+  }
+
+  # 1. EFFECTIVE SAMPLE SIZE
+  ess <- (sum(weight_vec))^2 / sum(weight_vec^2)
+  ess_ratio <- ess / length(weight_vec)
+
+  # 2. COVARIATE BALANCE (SMD before and after weighting)
+  balance <- NULL
+  if (length(covariates) > 0) {
+    study_df <- data %>% dplyr::distinct(studlab, .keep_all = TRUE)
+
+    # Match weights to studies
+    study_df$weight <- weight_vec[match(study_df$studlab, study_labels)]
+
+    balance <- purrr::map_dfr(covariates, function(cov) {
+      study_vals <- study_df[[cov]]
+      target_val <- target_population[[cov]]
+
+      if (is.numeric(study_vals) && is.numeric(target_val)) {
+        # Standardized Mean Difference (SMD)
+        # SMD = (mean_study - mean_target) / pooled_sd
+
+        # Unweighted
+        mean_unweighted <- mean(study_vals, na.rm = TRUE)
+        sd_unweighted <- stats::sd(study_vals, na.rm = TRUE)
+        smd_unweighted <- (mean_unweighted - target_val) / (sd_unweighted + 1e-8)
+
+        # Weighted
+        mean_weighted <- stats::weighted.mean(study_vals, w = study_df$weight, na.rm = TRUE)
+        # Weighted SD
+        var_weighted <- stats::weighted.mean((study_vals - mean_weighted)^2,
+                                            w = study_df$weight, na.rm = TRUE)
+        sd_weighted <- sqrt(var_weighted)
+        smd_weighted <- (mean_weighted - target_val) / (sd_weighted + 1e-8)
+
+        improvement <- abs(smd_unweighted) - abs(smd_weighted)
+
+        tibble::tibble(
+          covariate = cov,
+          target_value = target_val,
+          mean_unweighted = mean_unweighted,
+          mean_weighted = mean_weighted,
+          smd_unweighted = smd_unweighted,
+          smd_weighted = smd_weighted,
+          improvement = improvement,
+          balanced = abs(smd_weighted) < 0.1
+        )
+      } else {
+        # Categorical variable - skip for now
+        tibble::tibble(
+          covariate = cov,
+          target_value = as.character(target_val),
+          mean_unweighted = NA,
+          mean_weighted = NA,
+          smd_unweighted = NA,
+          smd_weighted = NA,
+          improvement = NA,
+          balanced = NA
+        )
+      }
+    })
+  }
+
+  # 3. POSITIVITY CHECK (convex hull for continuous covariates)
+  positivity <- list(all_within_hull = NA, message = "")
+
+  if (length(covariates) >= 2) {
+    numeric_covs <- covariates[sapply(covariates, function(c) is.numeric(data[[c]]))]
+
+    if (length(numeric_covs) >= 2) {
+      study_df <- data %>% dplyr::distinct(studlab, .keep_all = TRUE)
+      study_matrix <- as.matrix(study_df[, numeric_covs[1:min(2, length(numeric_covs))]])
+      target_vec <- unlist(target_population[numeric_covs[1:min(2, length(numeric_covs))]])
+
+      # Simple positivity check: are target values within min/max range?
+      within_range <- all(sapply(seq_along(target_vec), function(i) {
+        val <- target_vec[i]
+        col_vals <- study_matrix[, i]
+        val >= min(col_vals, na.rm = TRUE) && val <= max(col_vals, na.rm = TRUE)
+      }))
+
+      positivity$all_within_hull <- within_range
+      positivity$message <- if (within_range) {
+        "Target population characteristics within study data range (positivity likely satisfied)"
+      } else {
+        "WARNING: Target population outside study data range (positivity violated)"
+      }
+    }
+  }
+
+  # 4. WEIGHT DISTRIBUTION SUMMARY
+  weight_summary <- list(
+    min = min(weight_vec),
+    q25 = stats::quantile(weight_vec, 0.25),
+    median = stats::median(weight_vec),
+    q75 = stats::quantile(weight_vec, 0.75),
+    max = max(weight_vec),
+    mean = mean(weight_vec),
+    sd = stats::sd(weight_vec),
+    cv = stats::sd(weight_vec) / mean(weight_vec)
   )
+
+  # Count extreme weights
+  extreme_low <- sum(weight_vec < stats::quantile(weight_vec, 0.05))
+  extreme_high <- sum(weight_vec > stats::quantile(weight_vec, 0.95))
+
+  # 5. GENERATE RECOMMENDATION
+  recommendation <- generate_transportability_recommendation(
+    ess_ratio = ess_ratio,
+    balance = balance,
+    positivity = positivity,
+    weight_summary = weight_summary
+  )
+
+  # Return comprehensive diagnostics
+  structure(
+    list(
+      effective_sample_size = ess,
+      ess_ratio = ess_ratio,
+      n_studies = length(weight_vec),
+      balance_table = balance,
+      positivity = positivity,
+      weight_distribution = weight_summary,
+      extreme_weights = list(low = extreme_low, high = extreme_high),
+      recommendation = recommendation
+    ),
+    class = c("transportability_diagnostics", "list")
+  )
+}
+
+#' Generate Transportability Recommendation
+#' @keywords internal
+generate_transportability_recommendation <- function(ess_ratio, balance,
+                                                    positivity, weight_summary) {
+  issues <- character()
+  severity <- "OK"
+
+  # Check ESS
+  if (ess_ratio < 0.5) {
+    issues <- c(issues,
+      sprintf("Low effective sample size (%.1f%% of original)", ess_ratio * 100))
+    severity <- "CAUTION"
+  }
+
+  if (ess_ratio < 0.3) {
+    severity <- "WARNING"
+  }
+
+  # Check balance
+  if (!is.null(balance) && nrow(balance) > 0) {
+    unbalanced <- balance %>%
+      dplyr::filter(!is.na(balanced), !balanced)
+
+    if (nrow(unbalanced) > 0) {
+      issues <- c(issues,
+        sprintf("%d covariate(s) still imbalanced after weighting (SMD > 0.1)",
+                nrow(unbalanced)))
+      severity <- ifelse(severity == "WARNING", "WARNING", "CAUTION")
+    }
+  }
+
+  # Check positivity
+  if (!is.na(positivity$all_within_hull) && !positivity$all_within_hull) {
+    issues <- c(issues,
+      "Target population outside study covariate range (positivity violation)")
+    severity <- "ERROR"
+  }
+
+  # Check weight variability
+  if (weight_summary$cv > 1.5) {
+    issues <- c(issues,
+      sprintf("High weight variability (CV = %.2f)", weight_summary$cv))
+    if (severity == "OK") severity <- "CAUTION"
+  }
+
+  # Generate recommendation text
+  if (length(issues) == 0) {
+    rec_text <- "Transportability weights appear reasonable. Proceed with caution and report sensitivity analyses."
+  } else {
+    rec_text <- paste0(
+      severity, ": ",
+      paste(issues, collapse = "; "),
+      ". ",
+      switch(severity,
+        "CAUTION" = "Consider sensitivity analyses.",
+        "WARNING" = "Use with extreme caution. Consider additional covariates or alternative methods.",
+        "ERROR" = "Transportability not valid. Do not use these weights.",
+        ""
+      )
+    )
+  }
+
+  list(
+    severity = severity,
+    issues = issues,
+    text = rec_text
+  )
+}
+
+#' Print method for transportability diagnostics
+#' @export
+print.transportability_diagnostics <- function(x, ...) {
+  cat("\n")
+  cat("═══════════════════════════════════════════════════\n")
+  cat("  Transportability Diagnostics\n")
+  cat("═══════════════════════════════════════════════════\n\n")
+
+  cat(sprintf("Number of studies: %d\n", x$n_studies))
+  cat(sprintf("Effective sample size: %.1f (%.1f%% of original)\n",
+              x$effective_sample_size, x$ess_ratio * 100))
+  cat("\n")
+
+  cat("Weight distribution:\n")
+  cat(sprintf("  Min:    %.3f\n", x$weight_distribution$min))
+  cat(sprintf("  Q1:     %.3f\n", x$weight_distribution$q25))
+  cat(sprintf("  Median: %.3f\n", x$weight_distribution$median))
+  cat(sprintf("  Q3:     %.3f\n", x$weight_distribution$q75))
+  cat(sprintf("  Max:    %.3f\n", x$weight_distribution$max))
+  cat(sprintf("  CV:     %.2f\n", x$weight_distribution$cv))
+  cat("\n")
+
+  if (!is.null(x$balance_table) && nrow(x$balance_table) > 0) {
+    cat("Covariate balance (SMD):\n")
+    print(x$balance_table %>%
+            dplyr::select(covariate, smd_unweighted, smd_weighted, balanced), n = Inf)
+    cat("\n")
+  }
+
+  cat("Positivity:\n")
+  cat(sprintf("  %s\n", x$positivity$message))
+  cat("\n")
+
+  cat("RECOMMENDATION:\n")
+  cat(sprintf("  %s\n", x$recommendation$text))
+  cat("\n")
+
+  invisible(x)
 }
 
 #' Component Network Meta-Analysis

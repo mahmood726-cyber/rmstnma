@@ -143,17 +143,24 @@ rmst_nma <- function(ipd, tau_list = c(90, 180, 365), reference = "Control") {
 
       if (length(treatments) < 2) next
 
-      # Determine treatment comparison
+      # FIXED: Create ALL pairwise comparisons for multi-arm trials
+      # This properly handles k-arm trials with k(k-1)/2 comparisons
       if (reference %in% treatments) {
-        treat1 <- reference
-        treat2 <- setdiff(treatments, reference)[1]
+        # Reference-based comparisons: all treatments vs reference
+        other_treatments <- setdiff(treatments, reference)
+        comparisons <- lapply(other_treatments, function(t) c(reference, t))
       } else {
-        treat1 <- treatments[1]
-        treat2 <- treatments[2]
+        # No reference in trial: all pairwise combinations
+        comparisons <- utils::combn(treatments, 2, simplify = FALSE)
       }
 
-      arm1_data <- trial_data[trial_data$treatment == treat1, ]
-      arm2_data <- trial_data[trial_data$treatment == treat2, ]
+      # Process each comparison
+      for (comp in comparisons) {
+        treat1 <- comp[1]
+        treat2 <- comp[2]
+
+        arm1_data <- trial_data[trial_data$treatment == treat1, ]
+        arm2_data <- trial_data[trial_data$treatment == treat2, ]
 
       combined_data <- rbind(
         data.frame(arm1_data, arm = 0, stringsAsFactors = FALSE),
@@ -174,16 +181,22 @@ rmst_nma <- function(ipd, tau_list = c(90, 180, 365), reference = "Control") {
       })
 
       if (!is.null(rmst_result)) {
+        # FIXED: Removed incorrect sign flip
+        # survRM2::rmst2() returns: RMST(arm=1) - RMST(arm=0)
+        # where arm=0 = treat1 (reference), arm=1 = treat2 (intervention)
+        # This directly gives TE = treat2 - treat1 (positive = favors treat2)
+        # See RMST_SIGN_CONVENTION_PROOF.md for mathematical proof
         pairwise <- rbind(pairwise, data.frame(
           trial = trial_id,
           treat1 = treat1,
           treat2 = treat2,
-          TE = -1 * rmst_result$unadjusted.result[1, "Est."],
+          TE = rmst_result$unadjusted.result[1, "Est."],  # CORRECT (no sign flip)
           seTE = rmst_result$unadjusted.result[1, "se"],
           stringsAsFactors = FALSE
         ))
       }
-    }
+      }  # End of comparison loop
+    }  # End of trial loop
 
     if (nrow(pairwise) >= 2) {
       nma_result <- netmeta::netmeta(
@@ -220,8 +233,11 @@ rmst_nma <- function(ipd, tau_list = c(90, 180, 365), reference = "Control") {
 #' ipd <- generate_example_ipd()
 #' results <- milestone_nma(ipd, times = c(180, 365))
 #' }
-milestone_nma <- function(ipd, times = c(90, 180, 365), reference = "Control") {
+milestone_nma <- function(ipd, times = c(90, 180, 365), reference = "Control",
+                         extend = FALSE, continuity_correction = c("standard", "empirical", "none")) {
   validate_ipd(ipd)
+
+  continuity_correction <- match.arg(continuity_correction)
 
   results <- list()
 
@@ -234,42 +250,85 @@ milestone_nma <- function(ipd, times = c(90, 180, 365), reference = "Control") {
 
       if (length(treatments) < 2) next
 
-      # Determine treatment comparison
+      # FIXED: Create ALL pairwise comparisons for multi-arm trials
       if (reference %in% treatments) {
-        treat1_name <- reference
-        treat2_name <- setdiff(treatments, reference)[1]
+        # Reference-based comparisons: all treatments vs reference
+        other_treatments <- setdiff(treatments, reference)
+        comparisons <- lapply(other_treatments, function(t) c(reference, t))
       } else {
-        treat1_name <- treatments[1]
-        treat2_name <- treatments[2]
+        # No reference in trial: all pairwise combinations
+        comparisons <- utils::combn(treatments, 2, simplify = FALSE)
       }
+
+      # Process each comparison
+      for (comp in comparisons) {
+        treat1_name <- comp[1]
+        treat2_name <- comp[2]
 
       # Arm 1 counts
       arm1_data <- trial_data[trial_data$treatment == treat1_name, ]
       km1 <- survival::survfit(survival::Surv(time, status) ~ 1, data = arm1_data)
-      summ1 <- summary(km1, times = t, extend = TRUE)
+
+      # Check if milestone exceeds follow-up
+      max_time1 <- max(arm1_data$time)
+      if (t > max_time1 && !extend) {
+        warning(sprintf(
+          "Milestone time %d exceeds follow-up (%d) in trial %s, arm %s. Skipping.",
+          t, max_time1, trial_id, treat1_name
+        ))
+        next
+      }
+
+      summ1 <- summary(km1, times = t, extend = extend)
       n1 <- km1$n
       events1 <- n1 - summ1$n.risk
 
       # Arm 2 counts
       arm2_data <- trial_data[trial_data$treatment == treat2_name, ]
       km2 <- survival::survfit(survival::Surv(time, status) ~ 1, data = arm2_data)
-      summ2 <- summary(km2, times = t, extend = TRUE)
+
+      max_time2 <- max(arm2_data$time)
+      if (t > max_time2 && !extend) {
+        warning(sprintf(
+          "Milestone time %d exceeds follow-up (%d) in trial %s, arm %s. Skipping.",
+          t, max_time2, trial_id, treat2_name
+        ))
+        next
+      }
+
+      summ2 <- summary(km2, times = t, extend = extend)
       n2 <- km2$n
       events2 <- n2 - summ2$n.risk
 
-      # Apply continuity correction if needed
+      # Apply continuity correction if needed (FIXED: now configurable)
       needs_correction <- (events1 == 0 || events2 == 0 ||
                           events1 == n1 || events2 == n2)
 
       if (needs_correction) {
+        if (continuity_correction == "none") {
+          warning(sprintf(
+            "Zero/all events in trial %s, comparison %s vs %s at time %d - SKIPPING (continuity_correction='none')",
+            trial_id, treat1_name, treat2_name, t
+          ))
+          next
+        }
+
         warning(sprintf(
-          "Zero/all events in trial %s at time %d - applying continuity correction",
-          trial_id, t
+          "Zero/all events in trial %s at time %d - applying %s continuity correction",
+          trial_id, t, continuity_correction
         ))
-        events1 <- events1 + 0.5
-        events2 <- events2 + 0.5
-        n1 <- n1 + 1
-        n2 <- n2 + 1
+
+        if (continuity_correction == "standard") {
+          # Cochrane method: add 0.5 to events only
+          events1 <- events1 + 0.5
+          events2 <- events2 + 0.5
+        } else if (continuity_correction == "empirical") {
+          # Empirical method: add 0.5 to events and 1 to denominators
+          events1 <- events1 + 0.5
+          events2 <- events2 + 0.5
+          n1 <- n1 + 1
+          n2 <- n2 + 1
+        }
       }
 
       pairwise_counts <- rbind(pairwise_counts, data.frame(
@@ -282,7 +341,8 @@ milestone_nma <- function(ipd, times = c(90, 180, 365), reference = "Control") {
         n2 = n2,
         stringsAsFactors = FALSE
       ))
-    }
+      }  # End of comparison loop
+    }  # End of trial loop
 
     if (nrow(pairwise_counts) >= 2) {
       nma_result <- netmeta::netmeta(
