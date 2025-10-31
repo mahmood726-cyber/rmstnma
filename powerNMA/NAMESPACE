@@ -19,6 +19,14 @@ S3method(print,predictive_ranking)
 S3method(plot,predictive_ranking)
 S3method(print,treatment_hierarchy)
 
+# Phase 2 methods (2024)
+S3method(print,mvnma)
+S3method(plot,mvnma)
+S3method(print,nma_missing_data)
+S3method(plot,nma_missing_data)
+S3method(print,cross_design_nma)
+S3method(plot,cross_design_nma)
+
 # Core functions
 export(clean_nma_data)
 export(clear_powernma_cache)
@@ -48,6 +56,12 @@ export(network_metareg)
 export(dose_response_nma)
 export(predictive_ranking)
 export(treatment_hierarchy)
+
+# Phase 2 methods (2024)
+export(multivariate_nma)
+export(handle_missing_data)
+export(recommend_missing_data_strategy)
+export(cross_design_synthesis)
 
 # Systematic review
 export(generate_prisma_nma_checklist)
