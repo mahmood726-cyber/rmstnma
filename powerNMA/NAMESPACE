@@ -38,6 +38,14 @@ S3method(print,bma_nma)
 S3method(summary,bma_nma)
 S3method(plot,bma_nma)
 
+# Automatic pathways
+S3method(print,auto_standard_nma)
+S3method(summary,auto_standard_nma)
+S3method(plot,auto_standard_nma)
+S3method(print,auto_experimental_nma)
+S3method(summary,auto_experimental_nma)
+S3method(plot,auto_experimental_nma)
+
 # Core functions
 export(clean_nma_data)
 export(clear_powernma_cache)
@@ -78,6 +86,10 @@ export(cross_design_synthesis)
 export(threshold_analysis)
 export(itr_from_nma)
 export(model_averaging_nma)
+
+# Automatic pathways
+export(auto_standard_nma)
+export(auto_experimental_nma)
 
 # Systematic review
 export(generate_prisma_nma_checklist)
