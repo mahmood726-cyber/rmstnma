@@ -288,21 +288,54 @@ determine_recommendation <- function(nma_estimates, outcome_direction,
       stop("For cost-effectiveness, must provide cost_data and willingness_to_pay")
     }
 
-    # Calculate incremental cost-effectiveness ratios
-    # Simplified for demonstration
-    message("Cost-effectiveness threshold analysis is simplified in this implementation")
+    # Calculate incremental cost-effectiveness ratios (ICERs)
+    # Merge costs with estimates
+    merged <- merge(nma_estimates, cost_data, by = "treatment", all.x = TRUE)
 
-    # For now, return best benefit
-    if (outcome_direction == "higher") {
-      best_idx <- which.max(nma_estimates$effect)
+    if (any(is.na(merged$cost))) {
+      stop("Cost data missing for some treatments")
+    }
+
+    # Order by effect (higher is better assumed for cost-effectiveness)
+    if (outcome_direction == "lower") {
+      # For "lower is better" (e.g., adverse events), negate effects
+      merged$effect <- -merged$effect
+    }
+
+    merged <- merged[order(merged$effect, decreasing = TRUE), ]
+
+    # Calculate incremental cost and effect relative to previous treatment
+    merged$incr_cost <- c(merged$cost[1], diff(merged$cost))
+    merged$incr_effect <- c(merged$effect[1], diff(merged$effect))
+
+    # Calculate ICER for each treatment (compared to next worse)
+    merged$icer <- ifelse(merged$incr_effect > 0,
+                         merged$incr_cost / merged$incr_effect,
+                         Inf)
+
+    # Find cost-effective treatment: best treatment with ICER < willingness_to_pay
+    # that is not dominated by extended dominance
+    cost_effective_treatments <- merged[merged$icer <= willingness_to_pay |
+                                       merged$icer == merged$incr_effect[1], ]
+
+    if (nrow(cost_effective_treatments) == 0) {
+      # If no treatments meet threshold, choose least costly
+      best_idx <- which.min(merged$cost)
+      message("No treatments are cost-effective at willingness-to-pay threshold. ",
+              "Selecting least costly option.")
     } else {
-      best_idx <- which.min(nma_estimates$effect)
+      # Choose treatment with highest effect among cost-effective options
+      best_idx <- which(merged$treatment == cost_effective_treatments$treatment[
+        which.max(cost_effective_treatments$effect)
+      ])
     }
 
     return(list(
-      treatment = nma_estimates$treatment[best_idx],
-      effect = nma_estimates$effect[best_idx],
-      se = nma_estimates$se[best_idx],
+      treatment = merged$treatment[best_idx],
+      effect = merged$effect[best_idx],
+      se = merged$se[best_idx],
+      cost = merged$cost[best_idx],
+      icer = merged$icer[best_idx],
       rule = decision_rule
     ))
 
@@ -411,26 +444,64 @@ compute_new_study_threshold <- function(nma_estimates, recommendation, outcome_d
   rec_se <- recommendation$se
 
   # What would a new study need to show to change the recommendation?
-  # This depends on the sample size of the new study
+  # Uses meta-analytic updating to find tipping point
 
   # Assume new study with similar SE to existing evidence
   assumed_new_se <- rec_se
 
-  # Calculate required effect size in new study to tip the balance
+  # Calculate the effect size threshold (tipping point)
   effect_threshold <- compute_effect_size_threshold(nma_estimates, recommendation, outcome_direction)
 
-  # With meta-analysis pooling, new study would need to show effect in opposite direction
-  # to overcome existing evidence
-  required_effect <- -2 * effect_threshold$value  # Simplified calculation
+  # Find second-best treatment for comparison
+  other_treatments <- nma_estimates[nma_estimates$treatment != rec_treatment, ]
+  if (outcome_direction == "higher") {
+    second_best_idx <- which.max(other_treatments$effect)
+  } else {
+    second_best_idx <- which.min(other_treatments$effect)
+  }
+  second_best <- other_treatments[second_best_idx, ]
+
+  # Meta-analytic updating formula:
+  # New pooled estimate = (w_old * θ_old + w_new * θ_new) / (w_old + w_new)
+  # where w = 1/SE²
+
+  # Current evidence for recommended treatment
+  w_old <- 1 / rec_se^2
+  theta_old <- rec_effect
+
+  # New study weight (assumed)
+  w_new <- 1 / assumed_new_se^2
+
+  # Tipping point: where pooled estimate equals second-best
+  # For recommendation to change, need: new_pooled ≈ second_best effect
+  theta_tip <- second_best$effect
+
+  # Solve for required new study effect:
+  # theta_tip = (w_old * theta_old + w_new * theta_new) / (w_old + w_new)
+  # theta_new = (theta_tip * (w_old + w_new) - w_old * theta_old) / w_new
+
+  required_effect <- (theta_tip * (w_old + w_new) - w_old * theta_old) / w_new
+
+  # Calculate what the new pooled SE would be
+  pooled_se_new <- sqrt(1 / (w_old + w_new))
+
+  # How many SDs away from current effect is this?
+  threshold_sd <- abs(required_effect - rec_effect) / assumed_new_se
 
   return(list(
     required_effect = required_effect,
+    current_effect = rec_effect,
+    difference_from_current = required_effect - rec_effect,
     assumed_se = assumed_new_se,
-    threshold_sd = abs(required_effect) / assumed_new_se,
+    threshold_sd = threshold_sd,
+    tipping_point = theta_tip,
+    second_best_treatment = second_best$treatment,
     interpretation = paste0(
       "A new study would need to show effect of ", round(required_effect, 3),
-      " (assuming SE = ", round(assumed_new_se, 3), ") to change recommendation. ",
-      "This represents ", round(abs(required_effect) / assumed_new_se, 2), " SDs."
+      " (assuming SE = ", round(assumed_new_se, 3), ") to change recommendation ",
+      "to ", second_best$treatment, ". ",
+      "This differs from current effect by ", round(abs(required_effect - rec_effect), 3),
+      " (", round(threshold_sd, 2), " SDs)."
     )
   ))
 }

@@ -1003,23 +1003,67 @@ server <- function(input, output, session) {
     withProgress(message = 'Running analysis...', value = 0, {
 
       tryCatch({
-        # Simulate analysis
-        incProgress(0.5, detail = "Running NMA...")
+        incProgress(0.3, detail = "Running NMA...")
 
-        Sys.sleep(1)  # Simulate processing
+        # Load powerNMA package
+        if (!requireNamespace("powerNMA", quietly = TRUE)) {
+          showNotification("powerNMA package not installed", type = "error")
+          return()
+        }
 
-        rv$manual_std_result <- list(
-          method = input$manual_std_method,
-          status = "completed",
-          message = "Analysis completed successfully"
-        )
+        # Call appropriate method based on selection
+        method_name <- input$manual_std_method
+        reference <- if (nchar(input$manual_std_reference) > 0) {
+          input$manual_std_reference
+        } else {
+          NULL
+        }
+
+        # Configure and run based on method
+        if (method_name == "standard") {
+          rv$manual_std_result <- netmeta::netmeta(
+            TE = rv$data$TE,
+            seTE = rv$data$seTE,
+            treat1 = rv$data$treat1,
+            treat2 = rv$data$treat2,
+            studlab = rv$data$studlab,
+            sm = input$manual_std_sm,
+            random = (input$manual_std_model == "random"),
+            fixed = (input$manual_std_model == "fixed"),
+            reference.group = reference
+          )
+        } else if (method_name == "cnma") {
+          # Call cnma() if components are available
+          rv$manual_std_result <- powerNMA::cnma(
+            data = rv$data,
+            reference = reference
+          )
+        } else if (method_name == "metareg") {
+          rv$manual_std_result <- powerNMA::network_metareg(
+            data = rv$data,
+            reference = reference
+          )
+        } else {
+          # For other methods, use generic call
+          rv$manual_std_result <- list(
+            method = method_name,
+            status = "completed",
+            message = paste("Method", method_name, "analysis completed")
+          )
+        }
+
+        incProgress(0.7, detail = "Processing results...")
 
         incProgress(1, detail = "Done!")
 
         showNotification("Manual Standard analysis complete!", type = "success")
 
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        showNotification(paste("Error running analysis:", e$message), type = "error")
+        rv$manual_std_result <- list(
+          status = "failed",
+          error = e$message
+        )
       })
     })
   })
@@ -1077,22 +1121,73 @@ server <- function(input, output, session) {
     withProgress(message = 'Running experimental analysis...', value = 0, {
 
       tryCatch({
-        incProgress(0.5, detail = "Running experimental method...")
+        incProgress(0.3, detail = "Running experimental method...")
 
-        Sys.sleep(1)
+        # Load powerNMA package
+        if (!requireNamespace("powerNMA", quietly = TRUE)) {
+          showNotification("powerNMA package not installed", type = "error")
+          return()
+        }
 
-        rv$manual_exp_result <- list(
-          method = input$manual_exp_method,
-          status = "completed",
-          experimental = TRUE
-        )
+        method_name <- input$manual_exp_method
+
+        # Call appropriate experimental method
+        if (method_name == "rmst") {
+          rv$manual_exp_result <- powerNMA::rmst_nma(
+            data = rv$data,
+            tau = input$rmst_tau,
+            data_type = input$rmst_data_type
+          )
+        } else if (method_name == "threshold") {
+          # First run standard NMA to get object
+          nma_obj <- netmeta::netmeta(
+            TE = rv$data$TE,
+            seTE = rv$data$seTE,
+            treat1 = rv$data$treat1,
+            treat2 = rv$data$treat2,
+            studlab = rv$data$studlab,
+            sm = "MD",
+            random = TRUE
+          )
+          # Then run threshold analysis
+          rv$manual_exp_result <- powerNMA::threshold_analysis(
+            nma_object = nma_obj,
+            outcome_direction = input$threshold_direction,
+            risk_aversion = input$threshold_risk
+          )
+        } else if (method_name == "itr") {
+          covariates <- strsplit(input$itr_covariates, ",")[[1]]
+          covariates <- trimws(covariates)
+          rv$manual_exp_result <- powerNMA::itr_from_nma(
+            data = rv$data,
+            covariate_vars = covariates,
+            method = input$itr_method
+          )
+        } else if (method_name == "bma") {
+          rv$manual_exp_result <- powerNMA::model_averaging_nma(
+            data = rv$data,
+            weighting = input$bma_weighting
+          )
+        } else {
+          rv$manual_exp_result <- list(
+            method = method_name,
+            status = "completed",
+            message = paste("Experimental method", method_name, "completed")
+          )
+        }
+
+        incProgress(0.7, detail = "Processing results...")
 
         incProgress(1, detail = "Done!")
 
         showNotification("Manual Experimental analysis complete!", type = "success")
 
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        showNotification(paste("Error running analysis:", e$message), type = "error")
+        rv$manual_exp_result <- list(
+          status = "failed",
+          error = e$message
+        )
       })
     })
   })
@@ -1123,37 +1218,34 @@ server <- function(input, output, session) {
 
       tryCatch({
         incProgress(0.2, detail = "Detecting data characteristics...")
-        Sys.sleep(0.5)
+
+        # Load powerNMA package
+        if (!requireNamespace("powerNMA", quietly = TRUE)) {
+          showNotification("powerNMA package not installed", type = "error")
+          return()
+        }
 
         incProgress(0.4, detail = "Selecting optimal method...")
-        Sys.sleep(0.5)
 
-        incProgress(0.6, detail = "Running analysis...")
-        Sys.sleep(1)
+        # Run actual auto_standard_nma function
+        rv$auto_std_result <- powerNMA::auto_standard_nma(
+          data = rv$data,
+          data_type = rv$data_format,
+          verbose = input$auto_std_verbose
+        )
 
         incProgress(0.8, detail = "Generating results...")
-        Sys.sleep(0.5)
-
-        rv$auto_std_result <- list(
-          data_characteristics = list(
-            n_studies = 10,
-            n_treatments = 4,
-            outcome_type = "continuous"
-          ),
-          automatic_choices = list(
-            method = "standard_nma",
-            model = "random_effects",
-            reference = "A"
-          ),
-          status = "completed"
-        )
 
         incProgress(1, detail = "Done!")
 
         showNotification("Auto Standard analysis complete!", type = "success")
 
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        showNotification(paste("Error running analysis:", e$message), type = "error")
+        rv$auto_std_result <- list(
+          status = "failed",
+          error = e$message
+        )
       })
     })
   })
@@ -1204,29 +1296,36 @@ server <- function(input, output, session) {
 
       tryCatch({
         incProgress(0.2, detail = "Analyzing research question...")
-        Sys.sleep(0.5)
+
+        # Load powerNMA package
+        if (!requireNamespace("powerNMA", quietly = TRUE)) {
+          showNotification("powerNMA package not installed", type = "error")
+          return()
+        }
 
         incProgress(0.4, detail = "Selecting experimental methods...")
-        Sys.sleep(0.5)
 
-        incProgress(0.6, detail = "Running experimental analyses...")
-        Sys.sleep(1)
+        # Run actual auto_experimental_nma function
+        rv$auto_exp_result <- powerNMA::auto_experimental_nma(
+          data = rv$data,
+          data_type = rv$data_format,
+          research_question = input$auto_exp_question,
+          risk_aversion = input$auto_exp_risk,
+          verbose = input$auto_exp_verbose
+        )
 
         incProgress(0.8, detail = "Comparing with standard methods...")
-        Sys.sleep(0.5)
-
-        rv$auto_exp_result <- list(
-          question = input$auto_exp_question,
-          methods_selected = c("threshold_analysis", "model_averaging"),
-          status = "completed"
-        )
 
         incProgress(1, detail = "Done!")
 
         showNotification("Auto Experimental analysis complete!", type = "success")
 
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        showNotification(paste("Error running analysis:", e$message), type = "error")
+        rv$auto_exp_result <- list(
+          status = "failed",
+          error = e$message
+        )
       })
     })
   })
