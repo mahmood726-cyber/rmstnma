@@ -1390,45 +1390,372 @@ server <- function(input, output, session) {
     )
   })
 
-  # Placeholder plots
+  # Real plots from analysis results
   output$plot_network <- renderPlotly({
-    plot_ly() %>%
-      add_trace(type = "scatter", mode = "markers") %>%
-      layout(title = "Network Plot (placeholder)")
+    # Get the most recent analysis result
+    result <- NULL
+    if (!is.null(rv$auto_std_result)) {
+      result <- rv$auto_std_result
+    } else if (!is.null(rv$auto_exp_result)) {
+      result <- rv$auto_exp_result
+    } else if (!is.null(rv$manual_std_result)) {
+      result <- rv$manual_std_result
+    }
+
+    if (is.null(result) || is.null(rv$data)) {
+      # Return empty plot if no results
+      return(plot_ly() %>%
+        layout(title = "Network Plot (run an analysis to see network)",
+               xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+               yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE)))
+    }
+
+    # Extract treatment network
+    tryCatch({
+      # Get unique treatments
+      treats <- unique(c(as.character(rv$data$treat1), as.character(rv$data$treat2)))
+      n_treats <- length(treats)
+
+      # Simple circle layout for treatments
+      angles <- seq(0, 2*pi, length.out = n_treats + 1)[1:n_treats]
+      x_pos <- cos(angles)
+      y_pos <- sin(angles)
+
+      # Create edges for comparisons
+      edges_x <- c()
+      edges_y <- c()
+
+      for (i in 1:nrow(rv$data)) {
+        t1_idx <- which(treats == as.character(rv$data$treat1[i]))
+        t2_idx <- which(treats == as.character(rv$data$treat2[i]))
+
+        edges_x <- c(edges_x, x_pos[t1_idx], x_pos[t2_idx], NA)
+        edges_y <- c(edges_y, y_pos[t1_idx], y_pos[t2_idx], NA)
+      }
+
+      # Create plotly network
+      plot_ly() %>%
+        add_trace(x = edges_x, y = edges_y, type = "scatter", mode = "lines",
+                 line = list(color = "lightgray", width = 2),
+                 hoverinfo = "none", showlegend = FALSE) %>%
+        add_trace(x = x_pos, y = y_pos, type = "scatter", mode = "markers+text",
+                 marker = list(size = 30, color = "#3498db"),
+                 text = treats, textposition = "top center",
+                 hoverinfo = "text", showlegend = FALSE) %>%
+        layout(title = paste("Treatment Network (", n_treats, "treatments )"),
+               xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+               yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+    }, error = function(e) {
+      plot_ly() %>% layout(title = paste("Error creating network plot:", e$message))
+    })
   })
 
   output$plot_forest <- renderPlotly({
-    plot_ly() %>%
-      add_trace(type = "scatter", mode = "markers") %>%
-      layout(title = "Forest Plot (placeholder)")
+    # Get NMA results
+    nma_obj <- NULL
+
+    if (!is.null(rv$auto_std_result)) {
+      nma_obj <- rv$auto_std_result$primary_analysis$model_object
+    } else if (!is.null(rv$manual_std_result)) {
+      nma_obj <- rv$manual_std_result
+    }
+
+    if (is.null(nma_obj) || !inherits(nma_obj, "netmeta")) {
+      return(plot_ly() %>%
+        layout(title = "Forest Plot (run an analysis to see treatment effects)"))
+    }
+
+    tryCatch({
+      # Extract treatment effects relative to reference
+      ref <- nma_obj$reference.group
+      if (is.null(ref)) ref <- rownames(nma_obj$TE.random)[1]
+
+      effects <- nma_obj$TE.random[, ref]
+      lower <- nma_obj$lower.random[, ref]
+      upper <- nma_obj$upper.random[, ref]
+      treats <- names(effects)
+
+      # Remove reference treatment itself
+      keep <- treats != ref
+      treats <- treats[keep]
+      effects <- effects[keep]
+      lower <- lower[keep]
+      upper <- upper[keep]
+
+      # Sort by effect size
+      ord <- order(effects)
+      treats <- treats[ord]
+      effects <- effects[ord]
+      lower <- lower[ord]
+      upper <- upper[ord]
+
+      # Create forest plot
+      plot_ly() %>%
+        add_trace(x = effects, y = treats, type = "scatter", mode = "markers",
+                 marker = list(size = 10, color = "#2ecc71"),
+                 error_x = list(type = "data",
+                               symmetric = FALSE,
+                               array = upper - effects,
+                               arrayminus = effects - lower),
+                 name = "Treatment Effect",
+                 hovertemplate = paste("%{y}<br>Effect: %{x:.3f}<br>",
+                                      "95% CI: (%{error_x.arrayminus:.3f}, %{error_x.array:.3f})<extra></extra>")) %>%
+        add_segments(x = 0, xend = 0, y = 0, yend = length(treats) + 1,
+                    line = list(dash = "dash", color = "red"),
+                    showlegend = FALSE, hoverinfo = "none") %>%
+        layout(title = paste("Treatment Effects vs", ref),
+               xaxis = list(title = "Effect Size", zeroline = FALSE),
+               yaxis = list(title = ""))
+    }, error = function(e) {
+      plot_ly() %>% layout(title = paste("Error creating forest plot:", e$message))
+    })
   })
 
   output$plot_ranking <- renderPlotly({
-    plot_ly() %>%
-      add_trace(type = "bar") %>%
-      layout(title = "Treatment Ranking (placeholder)")
+    # Get NMA results
+    nma_obj <- NULL
+
+    if (!is.null(rv$auto_std_result)) {
+      nma_obj <- rv$auto_std_result$primary_analysis$model_object
+    } else if (!is.null(rv$manual_std_result)) {
+      nma_obj <- rv$manual_std_result
+    }
+
+    if (is.null(nma_obj) || !inherits(nma_obj, "netmeta")) {
+      return(plot_ly() %>%
+        layout(title = "Treatment Ranking (run an analysis to see rankings)"))
+    }
+
+    tryCatch({
+      # Calculate P-scores (probability of being best)
+      if (!is.null(nma_obj$P.random)) {
+        pscores <- nma_obj$P.random
+        treats <- names(pscores)
+
+        # Sort by P-score
+        ord <- order(pscores, decreasing = TRUE)
+        treats <- treats[ord]
+        pscores <- pscores[ord]
+
+        # Create ranking bar plot
+        plot_ly() %>%
+          add_trace(x = pscores, y = treats, type = "bar",
+                   orientation = "h",
+                   marker = list(color = pscores, colorscale = "Viridis",
+                                cmin = 0, cmax = 1,
+                                colorbar = list(title = "P-score")),
+                   text = paste0(round(pscores * 100, 1), "%"),
+                   textposition = "outside",
+                   hovertemplate = "%{y}<br>P-score: %{x:.3f}<extra></extra>") %>%
+          layout(title = "Treatment Rankings (P-scores)",
+                 xaxis = list(title = "P-score (higher is better)", range = c(0, 1)),
+                 yaxis = list(title = "", categoryorder = "trace"))
+      } else {
+        # Fallback: rank by treatment effects
+        ref <- nma_obj$reference.group
+        if (is.null(ref)) ref <- rownames(nma_obj$TE.random)[1]
+
+        effects <- nma_obj$TE.random[, ref]
+        treats <- names(effects)
+
+        ord <- order(effects, decreasing = TRUE)
+        treats <- treats[ord]
+        effects <- effects[ord]
+
+        plot_ly() %>%
+          add_trace(x = seq_along(treats), y = treats, type = "bar",
+                   orientation = "h",
+                   text = paste("Rank", seq_along(treats)),
+                   hovertemplate = "%{y}<br>Rank: %{x}<extra></extra>") %>%
+          layout(title = "Treatment Rankings (by effect size)",
+                 xaxis = list(title = "Rank", dtick = 1),
+                 yaxis = list(title = "", categoryorder = "trace"))
+      }
+    }, error = function(e) {
+      plot_ly() %>% layout(title = paste("Error creating ranking plot:", e$message))
+    })
   })
 
-  # Download handlers (placeholders)
+  # Download handlers with actual report generation
   output$download_report_html <- downloadHandler(
-    filename = "powernma_report.html",
+    filename = function() {
+      paste0("powerNMA_report_", Sys.Date(), ".html")
+    },
     content = function(file) {
-      writeLines("HTML report would be generated here", file)
+      # Generate HTML report
+      tryCatch({
+        # Collect analysis results
+        results_available <- c()
+        if (!is.null(rv$auto_std_result)) results_available <- c(results_available, "Auto Standard")
+        if (!is.null(rv$auto_exp_result)) results_available <- c(results_available, "Auto Experimental")
+        if (!is.null(rv$manual_std_result)) results_available <- c(results_available, "Manual Standard")
+        if (!is.null(rv$manual_exp_result)) results_available <- c(results_available, "Manual Experimental")
+
+        if (length(results_available) == 0) {
+          writeLines("<html><body><h1>No analyses available for report</h1></body></html>", file)
+          return()
+        }
+
+        # Create HTML report
+        html_content <- c(
+          "<!DOCTYPE html>",
+          "<html>",
+          "<head>",
+          "<title>powerNMA Analysis Report</title>",
+          "<style>",
+          "  body { font-family: Arial, sans-serif; margin: 40px; }",
+          "  h1 { color: #2c3e50; }",
+          "  h2 { color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 5px; }",
+          "  table { border-collapse: collapse; width: 100%; margin: 20px 0; }",
+          "  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }",
+          "  th { background-color: #3498db; color: white; }",
+          "  .info-box { background-color: #ecf0f1; padding: 15px; margin: 10px 0; border-radius: 5px; }",
+          "</style>",
+          "</head>",
+          "<body>",
+          "<h1>powerNMA Analysis Report</h1>",
+          paste0("<p><strong>Generated:</strong> ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "</p>"),
+          paste0("<p><strong>Analyses Completed:</strong> ", paste(results_available, collapse = ", "), "</p>"),
+          "<hr>"
+        )
+
+        # Add Auto Standard results if available
+        if (!is.null(rv$auto_std_result)) {
+          html_content <- c(html_content,
+            "<h2>Auto Standard Analysis</h2>",
+            "<div class='info-box'>",
+            paste0("<p><strong>Method Selected:</strong> ", rv$auto_std_result$automatic_choices$primary_method, "</p>"),
+            paste0("<p><strong>Reference Treatment:</strong> ", rv$auto_std_result$automatic_choices$reference, "</p>"),
+            paste0("<p><strong>Model Type:</strong> ", rv$auto_std_result$automatic_choices$model_type, "</p>"),
+            "</div>"
+          )
+
+          # Add treatment effects table if available
+          if (!is.null(rv$auto_std_result$primary_analysis$model_object)) {
+            nma <- rv$auto_std_result$primary_analysis$model_object
+            if (inherits(nma, "netmeta")) {
+              ref <- nma$reference.group
+              if (is.null(ref)) ref <- rownames(nma$TE.random)[1]
+
+              html_content <- c(html_content,
+                "<h3>Treatment Effects</h3>",
+                "<table>",
+                "<tr><th>Treatment</th><th>Effect</th><th>95% CI Lower</th><th>95% CI Upper</th></tr>"
+              )
+
+              for (i in 1:nrow(nma$TE.random)) {
+                treat <- rownames(nma$TE.random)[i]
+                if (treat != ref) {
+                  html_content <- c(html_content,
+                    sprintf("<tr><td>%s vs %s</td><td>%.3f</td><td>%.3f</td><td>%.3f</td></tr>",
+                            treat, ref,
+                            nma$TE.random[i, ref],
+                            nma$lower.random[i, ref],
+                            nma$upper.random[i, ref])
+                  )
+                }
+              }
+
+              html_content <- c(html_content, "</table>")
+            }
+          }
+        }
+
+        # Add data summary
+        if (!is.null(rv$data)) {
+          html_content <- c(html_content,
+            "<h2>Data Summary</h2>",
+            "<div class='info-box'>",
+            paste0("<p><strong>Number of Rows:</strong> ", nrow(rv$data), "</p>"),
+            paste0("<p><strong>Number of Columns:</strong> ", ncol(rv$data), "</p>"),
+            paste0("<p><strong>Studies:</strong> ", length(unique(rv$data$studlab)), "</p>"),
+            "</div>"
+          )
+        }
+
+        # Close HTML
+        html_content <- c(html_content,
+          "<hr>",
+          "<p><em>Report generated by powerNMA Shiny GUI</em></p>",
+          "</body>",
+          "</html>"
+        )
+
+        writeLines(html_content, file)
+
+      }, error = function(e) {
+        writeLines(paste("<html><body><h1>Error generating report:</h1><p>", e$message, "</p></body></html>"), file)
+      })
     }
   )
 
   output$download_report_pdf <- downloadHandler(
-    filename = "powernma_report.pdf",
+    filename = function() {
+      paste0("powerNMA_report_", Sys.Date(), ".pdf")
+    },
     content = function(file) {
-      writeLines("PDF report would be generated here", file)
+      # PDF generation requires rmarkdown and pandoc
+      # For now, create a simple text-based report
+      tryCatch({
+        # Create a temporary text file
+        temp_txt <- tempfile(fileext = ".txt")
+
+        txt_content <- c(
+          "=====================================",
+          "powerNMA Analysis Report",
+          "=====================================",
+          "",
+          paste("Generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+          ""
+        )
+
+        if (!is.null(rv$auto_std_result)) {
+          txt_content <- c(txt_content,
+            "AUTO STANDARD ANALYSIS",
+            "---------------------------------",
+            paste("Method:", rv$auto_std_result$automatic_choices$primary_method),
+            paste("Reference:", rv$auto_std_result$automatic_choices$reference),
+            paste("Model:", rv$auto_std_result$automatic_choices$model_type),
+            ""
+          )
+        }
+
+        if (!is.null(rv$data)) {
+          txt_content <- c(txt_content,
+            "DATA SUMMARY",
+            "---------------------------------",
+            paste("Rows:", nrow(rv$data)),
+            paste("Columns:", ncol(rv$data)),
+            ""
+          )
+        }
+
+        txt_content <- c(txt_content,
+          "",
+          "Note: Full PDF generation requires pandoc.",
+          "This is a text-based summary. For full PDF,",
+          "install pandoc and rmarkdown package.",
+          ""
+        )
+
+        writeLines(txt_content, file)
+
+      }, error = function(e) {
+        writeLines(paste("Error generating report:", e$message), file)
+      })
     }
   )
 
   output$download_data <- downloadHandler(
-    filename = "results.csv",
+    filename = function() {
+      paste0("powerNMA_data_", Sys.Date(), ".csv")
+    },
     content = function(file) {
       if (!is.null(rv$data)) {
         write.csv(rv$data, file, row.names = FALSE)
+      } else {
+        # Write empty file with message
+        writeLines("No data available to export", file)
       }
     }
   )
