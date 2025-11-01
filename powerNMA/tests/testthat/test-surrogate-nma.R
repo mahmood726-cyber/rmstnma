@@ -647,3 +647,251 @@ test_that("Full surrogate NMA workflow", {
   # They should be similar (allowing for some variation)
   expect_true(abs(best_S - best_T) <= 2)  # Within 2 ranks
 })
+
+
+# ==============================================================================
+# PHASE 2 TESTS: Advanced Diagnostics and Visualization
+# ==============================================================================
+
+test_that("surrogacy_diagnostics computes metrics correctly", {
+
+  skip_if_not_installed("MASS")
+
+  set.seed(999)
+  data <- create_test_surrogate_data(
+    n_studies = 15,
+    n_treatments = 4,
+    missing_true_pct = 0.3
+  )
+
+  net <- build_surrogate_network(
+    data = data,
+    study = study,
+    treat1 = treat1,
+    treat2 = treat2,
+    S_eff = pfs_effect,
+    S_se = pfs_se,
+    T_eff = os_effect,
+    T_se = os_se
+  )
+
+  fit <- fit_bivariate_nma_freq(net, n_boot = 50, seed = 456)
+
+  diag <- surrogacy_diagnostics(fit, conf_level = 0.95)
+
+  # Check structure
+  expect_s3_class(diag, "surrogacy_diagnostics")
+
+  # Check surrogacy parameters
+  expect_true(!is.null(diag$alpha$mean))
+  expect_true(!is.null(diag$beta$mean))
+  expect_true(!is.null(diag$alpha$ci_lower))
+  expect_true(!is.null(diag$beta$ci_upper))
+
+  # Check R²
+  expect_true(is.numeric(diag$r2_trial))
+  if (!is.na(diag$r2_trial)) {
+    expect_true(diag$r2_trial >= 0 && diag$r2_trial <= 1)
+  }
+
+  # Check STE
+  expect_s3_class(diag$ste, "surrogate_threshold_effect")
+
+  # Check quality assessment
+  expect_true(diag$quality %in% c("Excellent (R² ≥ 0.8, β ≈ 1)",
+                                   "Good (R² ≥ 0.6, β moderate)",
+                                   "Moderate (R² ≥ 0.4)",
+                                   "Weak (R² < 0.4)",
+                                   "Unknown"))
+})
+
+
+test_that("stress_surrogacy performs sensitivity analysis", {
+
+  skip_if_not_installed("MASS")
+
+  set.seed(111)
+  data <- create_test_surrogate_data(
+    n_studies = 12,
+    n_treatments = 3,
+    missing_true_pct = 0.25
+  )
+
+  net <- build_surrogate_network(
+    data = data,
+    study = study,
+    treat1 = treat1,
+    treat2 = treat2,
+    S_eff = pfs_effect,
+    S_se = pfs_se,
+    T_eff = os_effect,
+    T_se = os_se
+  )
+
+  fit <- fit_bivariate_nma_freq(net, n_boot = 40, seed = 789)
+
+  stress <- stress_surrogacy(
+    fit,
+    r2_multipliers = c(0.7, 1.0),
+    slope_shifts = c(0, 0.1)
+  )
+
+  # Check structure
+  expect_s3_class(stress, "stress_analysis")
+
+  # Check number of scenarios
+  expect_equal(stress$n_scenarios, 4)  # 2 R² × 2 slopes
+
+  # Check that each scenario has required elements
+  for (scenario in stress$scenarios) {
+    expect_true(!is.null(scenario$sucra))
+    expect_true(!is.null(scenario$poth))
+    expect_equal(length(scenario$sucra), net$K)
+    expect_true(scenario$poth >= 0 && scenario$poth <= 1)
+  }
+
+  # Check original SUCRA
+  expect_equal(length(stress$original_sucra), net$K)
+})
+
+
+test_that("compute_poth calculates correctly", {
+
+  # Create simple rank matrix
+  # 3 treatments, 10 iterations
+  # Treatment 1 always rank 1, Treatment 2 always rank 2, Treatment 3 always rank 3
+  rank_matrix_perfect <- matrix(c(
+    rep(1, 10),  # Treatment 1
+    rep(2, 10),  # Treatment 2
+    rep(3, 10)   # Treatment 3
+  ), nrow = 10, ncol = 3)
+
+  poth_perfect <- compute_poth(rank_matrix_perfect)
+
+  # Perfect consistency → POTH = 1
+  expect_equal(poth_perfect, 1)
+
+  # Random ranks
+  set.seed(333)
+  rank_matrix_random <- matrix(
+    sample(1:3, 30, replace = TRUE),
+    nrow = 10,
+    ncol = 3
+  )
+
+  poth_random <- compute_poth(rank_matrix_random)
+
+  # Random ranks → POTH < 1
+  expect_true(poth_random < 1)
+  expect_true(poth_random >= 0)
+})
+
+
+test_that("plot_surrogacy creates plot without errors", {
+
+  skip_if_not_installed("MASS")
+
+  set.seed(222)
+  data <- create_test_surrogate_data(
+    n_studies = 10,
+    n_treatments = 3,
+    missing_true_pct = 0.2
+  )
+
+  net <- build_surrogate_network(
+    data = data,
+    study = study,
+    treat1 = treat1,
+    treat2 = treat2,
+    S_eff = pfs_effect,
+    S_se = pfs_se,
+    T_eff = os_effect,
+    T_se = os_se
+  )
+
+  fit <- fit_bivariate_nma_freq(net, n_boot = 30, seed = 555)
+
+  # Should not error
+  expect_no_error({
+    plot_obj <- plot_surrogacy(fit, show_ci = TRUE)
+  })
+
+  # With ggplot2, should return ggplot object
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    plot_obj <- plot_surrogacy(fit, show_ci = TRUE)
+    expect_s3_class(plot_obj, "ggplot")
+  }
+})
+
+
+test_that("plot_surrogacy handles insufficient data", {
+
+  # Create network with too few true endpoint observations
+  data <- data.frame(
+    study = c("S1", "S2"),
+    treat1 = c("A", "B"),
+    treat2 = c("B", "C"),
+    pfs = c(0.5, 0.6),
+    pfs_se = c(0.1, 0.1),
+    os = c(0.3, NA),  # Only 1 observation
+    os_se = c(0.15, NA)
+  )
+
+  net <- build_surrogate_network(
+    data = data,
+    study = study,
+    treat1 = treat1,
+    treat2 = treat2,
+    S_eff = pfs,
+    S_se = pfs_se,
+    T_eff = os,
+    T_se = os_se
+  )
+
+  fit <- fit_bivariate_nma_freq(net, n_boot = 20)
+
+  # Should error with informative message
+  expect_error(
+    plot_surrogacy(fit),
+    "at least 3 observations"
+  )
+})
+
+
+test_that("Print methods for Phase 2 work correctly", {
+
+  skip_if_not_installed("MASS")
+
+  set.seed(444)
+  data <- create_test_surrogate_data(
+    n_studies = 10,
+    n_treatments = 3,
+    missing_true_pct = 0.3
+  )
+
+  net <- build_surrogate_network(
+    data = data,
+    study = study,
+    treat1 = treat1,
+    treat2 = treat2,
+    S_eff = pfs_effect,
+    S_se = pfs_se,
+    T_eff = os_effect,
+    T_se = os_se
+  )
+
+  fit <- fit_bivariate_nma_freq(net, n_boot = 30, seed = 666)
+
+  # Test surrogacy_diagnostics print
+  diag <- surrogacy_diagnostics(fit)
+  expect_output(print(diag), "Surrogacy Diagnostics")
+  expect_output(print(diag), "α \\(intercept\\)")
+  expect_output(print(diag), "β \\(slope\\)")
+  expect_output(print(diag), "Quality Assessment")
+
+  # Test stress_analysis print
+  stress <- stress_surrogacy(fit, r2_multipliers = c(0.8, 1.0), slope_shifts = c(0))
+  expect_output(print(stress), "Stress Analysis")
+  expect_output(print(stress), "Scenarios tested")
+  expect_output(print(stress), "POTH")
+})

@@ -749,3 +749,434 @@ print.surrogate_threshold_effect <- function(x, ...) {
 
   invisible(x)
 }
+
+
+# ==============================================================================
+# PHASE 2: ADVANCED DIAGNOSTICS AND VISUALIZATION
+# ==============================================================================
+
+#' Compute Surrogacy Diagnostics
+#'
+#' Calculates R² individual, R² trial, and other surrogacy validation metrics
+#' from a bivariate NMA fit.
+#'
+#' @param fit bivariate_nma_fit object from fit_bivariate_nma_freq()
+#' @param conf_level Confidence level for intervals (default 0.95)
+#'
+#' @return surrogacy_diagnostics object with validation metrics
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' fit <- fit_bivariate_nma_freq(net, n_boot = 500)
+#' diag <- surrogacy_diagnostics(fit)
+#' print(diag)
+#' }
+surrogacy_diagnostics <- function(fit, conf_level = 0.95) {
+
+  if (!inherits(fit, "bivariate_nma_fit")) {
+    stop("fit must be a bivariate_nma_fit object")
+  }
+
+  net <- fit$net
+
+  # Extract surrogacy parameters
+  alpha <- fit$surrogacy$alpha
+  beta <- fit$surrogacy$beta
+  alpha_draws <- fit$surrogacy$alpha_draws
+  beta_draws <- fit$surrogacy$beta_draws
+
+  # Compute STE
+  ste <- compute_surrogate_threshold_effect(
+    alpha_draws = alpha_draws,
+    beta_draws = beta_draws,
+    threshold_T = 0.0,
+    conf_level = conf_level
+  )
+
+  # Estimate R² at trial level
+  # R²_trial = proportion of variance in T effects explained by S effects
+  obs_T <- is.finite(net$T_eff)
+
+  if (sum(obs_T) >= 3) {
+    S_obs <- net$S_eff[obs_T]
+    T_obs <- net$T_eff[obs_T]
+
+    # Predicted T from S using surrogacy relationship
+    T_pred <- alpha + beta * S_obs
+
+    # R² = 1 - (RSS / TSS)
+    rss <- sum((T_obs - T_pred)^2)
+    tss <- sum((T_obs - mean(T_obs))^2)
+    r2_trial <- max(0, 1 - rss / tss)
+
+    # Correlation
+    cor_trial <- stats::cor(S_obs, T_obs)
+
+  } else {
+    r2_trial <- NA
+    cor_trial <- NA
+  }
+
+  # Surrogacy quality assessment
+  quality <- "Unknown"
+  if (!is.na(r2_trial) && !is.na(beta)) {
+    if (r2_trial >= 0.8 && abs(beta - 1) < 0.2) {
+      quality <- "Excellent (R² ≥ 0.8, β ≈ 1)"
+    } else if (r2_trial >= 0.6 && abs(beta) >= 0.5) {
+      quality <- "Good (R² ≥ 0.6, β moderate)"
+    } else if (r2_trial >= 0.4) {
+      quality <- "Moderate (R² ≥ 0.4)"
+    } else {
+      quality <- "Weak (R² < 0.4)"
+    }
+  }
+
+  result <- structure(
+    list(
+      alpha = list(
+        mean = alpha,
+        ci_lower = stats::quantile(alpha_draws, (1 - conf_level) / 2),
+        ci_upper = stats::quantile(alpha_draws, 1 - (1 - conf_level) / 2)
+      ),
+      beta = list(
+        mean = beta,
+        ci_lower = stats::quantile(beta_draws, (1 - conf_level) / 2),
+        ci_upper = stats::quantile(beta_draws, 1 - (1 - conf_level) / 2)
+      ),
+      r2_trial = r2_trial,
+      correlation_trial = cor_trial,
+      n_observed_true = sum(obs_T),
+      n_total = length(obs_T),
+      ste = ste,
+      quality = quality,
+      conf_level = conf_level
+    ),
+    class = "surrogacy_diagnostics"
+  )
+
+  return(result)
+}
+
+
+#' Stress Test Surrogacy Assumptions
+#'
+#' Performs sensitivity analysis by varying R² and slope to assess robustness
+#' of treatment rankings to surrogacy assumptions.
+#'
+#' @param fit bivariate_nma_fit object
+#' @param r2_multipliers Vector of R² multipliers to test (default c(0.5, 0.7, 0.9, 1.0))
+#' @param slope_shifts Vector of slope shifts to test (default c(-0.1, 0, 0.1))
+#'
+#' @return stress_analysis object with SUCRA under different scenarios
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' fit <- fit_bivariate_nma_freq(net, n_boot = 500)
+#' stress <- stress_surrogacy(fit)
+#' print(stress)
+#' }
+stress_surrogacy <- function(
+  fit,
+  r2_multipliers = c(0.5, 0.7, 0.9, 1.0),
+  slope_shifts = c(-0.1, 0, 0.1)
+) {
+
+  if (!inherits(fit, "bivariate_nma_fit")) {
+    stop("fit must be a bivariate_nma_fit object")
+  }
+
+  # Get treatment effect draws
+  D <- fit$draws_T
+  K <- ncol(D)
+
+  # Compute mean treatment effects
+  D_mean <- matrix(
+    colMeans(D),
+    nrow = nrow(D),
+    ncol = ncol(D),
+    byrow = TRUE
+  )
+
+  # Test different scenarios
+  results <- list()
+
+  for (r2 in r2_multipliers) {
+    for (shift in slope_shifts) {
+
+      # Adjust draws: shrink toward mean (↓R²) and shift slope
+      D_adjusted <- D_mean + (D - D_mean) * r2 + shift
+
+      # Compute ranks
+      ranks_adjusted <- t(apply(D_adjusted, 1, function(x) rank(-x)))
+      mean_ranks <- colMeans(ranks_adjusted)
+
+      # SUCRA
+      sucra_adjusted <- (K - mean_ranks) / (K - 1)
+      names(sucra_adjusted) <- fit$net$treat_levels
+
+      # POTH (Probability of Treatment Hierarchy)
+      modal_order <- order(mean_ranks)
+      kendall_distances <- apply(ranks_adjusted, 1, function(r) {
+        kendall_dist(order(r), modal_order)
+      })
+      dmax <- K * (K - 1) / 2
+      poth_value <- 1 - mean(kendall_distances) / dmax
+
+      scenario_name <- sprintf("R2=%.1f_Slope%+.2f", r2, shift)
+
+      results[[scenario_name]] <- list(
+        r2_mult = r2,
+        slope_shift = shift,
+        sucra = sucra_adjusted,
+        poth = poth_value,
+        mean_ranks = mean_ranks
+      )
+    }
+  }
+
+  structure(
+    list(
+      scenarios = results,
+      original_sucra = fit$ranks$sucra,
+      n_scenarios = length(results),
+      fit = fit
+    ),
+    class = "stress_analysis"
+  )
+}
+
+# Helper function for Kendall distance
+kendall_dist <- function(order1, order2) {
+  K <- length(order1)
+  o1 <- order(order1)
+  o2 <- order(order2)
+  d <- 0
+  for (i in 1:(K - 1)) {
+    for (j in (i + 1):K) {
+      d <- d + as.integer((o1[i] - o1[j]) * (o2[i] - o2[j]) < 0)
+    }
+  }
+  d
+}
+
+
+#' Probability of Treatment Hierarchy (POTH)
+#'
+#' Computes POTH metric: probability that treatment rankings match the modal
+#' (most likely) ranking order. Higher values indicate more certain rankings.
+#'
+#' @param rank_matrix Matrix of rankings (rows = iterations, cols = treatments)
+#'
+#' @return Scalar POTH value between 0 and 1
+#'
+#' @export
+compute_poth <- function(rank_matrix) {
+
+  K <- ncol(rank_matrix)
+
+  # Modal ranking order (based on mean ranks)
+  mean_ranks <- colMeans(rank_matrix, na.rm = TRUE)
+  modal_order <- order(mean_ranks)
+
+  # Kendall distance for each iteration
+  kendall_distances <- apply(rank_matrix, 1, function(r) {
+    kendall_dist(order(r), modal_order)
+  })
+
+  # POTH = 1 - (mean distance / max possible distance)
+  dmax <- K * (K - 1) / 2
+  poth <- 1 - mean(kendall_distances) / dmax
+
+  return(poth)
+}
+
+
+#' Plot Surrogacy Relationship
+#'
+#' Creates scatter plot of surrogate vs true endpoint effects with
+#' regression line showing surrogacy relationship (α, β).
+#'
+#' @param fit bivariate_nma_fit object
+#' @param show_ci Show confidence interval band (default TRUE)
+#'
+#' @return ggplot2 object (if ggplot2 available), otherwise base plot
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' fit <- fit_bivariate_nma_freq(net, n_boot = 500)
+#' plot_surrogacy(fit)
+#' }
+plot_surrogacy <- function(fit, show_ci = TRUE) {
+
+  if (!inherits(fit, "bivariate_nma_fit")) {
+    stop("fit must be a bivariate_nma_fit object")
+  }
+
+  net <- fit$net
+
+  # Extract observed data
+  obs_T <- is.finite(net$T_eff)
+
+  if (sum(obs_T) < 3) {
+    stop("Need at least 3 observations with both S and T to plot surrogacy")
+  }
+
+  S_obs <- net$S_eff[obs_T]
+  T_obs <- net$T_eff[obs_T]
+
+  # Surrogacy line: T = α + β × S
+  alpha <- fit$surrogacy$alpha
+  beta <- fit$surrogacy$beta
+
+  # Try ggplot2 first
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+
+    df <- data.frame(
+      S = S_obs,
+      T = T_obs
+    )
+
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = S, y = T)) +
+      ggplot2::geom_point(size = 3, alpha = 0.7, color = "#2c3e50") +
+      ggplot2::geom_abline(
+        intercept = alpha,
+        slope = beta,
+        color = "#e74c3c",
+        size = 1.2,
+        linetype = "solid"
+      ) +
+      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::labs(
+        title = "Surrogacy Relationship",
+        subtitle = sprintf("T = %.3f + %.3f × S", alpha, beta),
+        x = "Surrogate Endpoint Effect (S)",
+        y = "True Endpoint Effect (T)"
+      ) +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold"),
+        panel.grid.minor = ggplot2::element_blank()
+      )
+
+    # Add confidence band if requested
+    if (show_ci) {
+      # Create prediction band from bootstrap draws
+      S_seq <- seq(min(S_obs), max(S_obs), length.out = 50)
+
+      # Use surrogacy draws to create CI
+      alpha_draws <- fit$surrogacy$alpha_draws
+      beta_draws <- fit$surrogacy$beta_draws
+
+      T_pred_matrix <- outer(alpha_draws, S_seq, "+") +
+                       outer(beta_draws, S_seq, "*")
+
+      T_lower <- apply(T_pred_matrix, 2, stats::quantile, 0.025)
+      T_upper <- apply(T_pred_matrix, 2, stats::quantile, 0.975)
+
+      ci_df <- data.frame(
+        S = S_seq,
+        lower = T_lower,
+        upper = T_upper
+      )
+
+      p <- p + ggplot2::geom_ribbon(
+        data = ci_df,
+        ggplot2::aes(x = S, ymin = lower, ymax = upper),
+        alpha = 0.2,
+        fill = "#e74c3c",
+        inherit.aes = FALSE
+      )
+    }
+
+    return(p)
+
+  } else {
+    # Fallback to base R plot
+    plot(
+      S_obs, T_obs,
+      xlab = "Surrogate Endpoint Effect (S)",
+      ylab = "True Endpoint Effect (T)",
+      main = sprintf("Surrogacy Relationship\nT = %.3f + %.3f × S", alpha, beta),
+      pch = 19,
+      col = "#2c3e50",
+      cex = 1.5
+    )
+
+    # Add regression line
+    abline(a = alpha, b = beta, col = "#e74c3c", lwd = 2)
+
+    # Add legend
+    legend(
+      "topleft",
+      legend = c("Observed", sprintf("T = %.2f + %.2f S", alpha, beta)),
+      col = c("#2c3e50", "#e74c3c"),
+      pch = c(19, NA),
+      lty = c(NA, 1),
+      lwd = c(NA, 2),
+      cex = 0.9
+    )
+
+    return(invisible(NULL))
+  }
+}
+
+
+#' Print method for surrogacy_diagnostics
+#' @export
+print.surrogacy_diagnostics <- function(x, ...) {
+  cat("Surrogacy Diagnostics\n")
+  cat("=====================\n\n")
+
+  cat("Surrogacy Parameters:\n")
+  cat("  α (intercept):", sprintf("%.3f [%.3f, %.3f]",
+      x$alpha$mean, x$alpha$ci_lower, x$alpha$ci_upper), "\n")
+  cat("  β (slope):", sprintf("%.3f [%.3f, %.3f]",
+      x$beta$mean, x$beta$ci_lower, x$beta$ci_upper), "\n\n")
+
+  if (!is.na(x$r2_trial)) {
+    cat("Trial-Level Validation:\n")
+    cat("  R² (trial):", sprintf("%.3f", x$r2_trial), "\n")
+    cat("  Correlation:", sprintf("%.3f", x$correlation_trial), "\n")
+    cat("  Observed pairs:", x$n_observed_true, "/", x$n_total, "\n\n")
+  }
+
+  cat("Quality Assessment:", x$quality, "\n\n")
+
+  cat("Surrogate Threshold Effect:\n")
+  cat("  Median STE:", sprintf("%.3f", x$ste$median), "\n")
+  cat("  ", x$conf_level * 100, "% CI: [",
+      sprintf("%.3f", x$ste$ci_lower), ", ",
+      sprintf("%.3f", x$ste$ci_upper), "]\n", sep = "")
+
+  invisible(x)
+}
+
+
+#' Print method for stress_analysis
+#' @export
+print.stress_analysis <- function(x, ...) {
+  cat("Surrogacy Stress Analysis\n")
+  cat("=========================\n\n")
+  cat("Scenarios tested:", x$n_scenarios, "\n")
+  cat("Original SUCRA:\n")
+  print(round(x$original_sucra, 3))
+  cat("\n")
+
+  cat("Stress test results (first 3 scenarios):\n")
+  for (i in seq_len(min(3, length(x$scenarios)))) {
+    scenario <- x$scenarios[[i]]
+    cat("\n", names(x$scenarios)[i], ":\n", sep = "")
+    cat("  POTH:", sprintf("%.3f", scenario$poth), "\n")
+    cat("  SUCRA range: [",
+        sprintf("%.3f", min(scenario$sucra)), ", ",
+        sprintf("%.3f", max(scenario$sucra)), "]\n", sep = "")
+  }
+
+  cat("\nInterpretation:\n")
+  cat("  If rankings are stable across scenarios, surrogacy is robust.\n")
+  cat("  Large ranking changes suggest sensitivity to surrogacy assumptions.\n")
+
+  invisible(x)
+}

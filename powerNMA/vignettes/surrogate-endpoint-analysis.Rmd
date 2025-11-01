@@ -1,0 +1,609 @@
+---
+title: "Surrogate Endpoint Analysis in powerNMA"
+author: "powerNMA Development Team"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Surrogate Endpoint Analysis in powerNMA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Introduction
+
+Surrogate endpoints are measurements (S) used to predict clinically meaningful outcomes (T) when the true endpoint is difficult or expensive to measure. Common examples include:
+
+- **Oncology**: Progression-free survival (S) → Overall survival (T)
+- **Cardiology**: Blood pressure reduction (S) → Cardiovascular events (T)
+- **HIV**: CD4 count (S) → AIDS progression or death (T)
+- **Diabetes**: HbA1c (S) → Diabetic complications (T)
+
+This vignette demonstrates how to use powerNMA's surrogate endpoint analysis features, integrated from the surroNMA package.
+
+## Key Concepts
+
+### Bivariate Network Meta-Analysis
+
+Joint modeling of surrogate and true endpoints to:
+- Estimate treatment effects on both endpoints simultaneously
+- Leverage surrogate data to improve predictions for the true endpoint
+- Account for the relationship between S and T
+
+### Surrogacy Parameters
+
+- **α (alpha)**: Intercept — systematic bias in S→T relationship
+- **β (beta)**: Slope — calibration factor (β ≈ 1 indicates strong surrogacy)
+- **R² trial**: Proportion of variance in T effects explained by S effects
+
+### Surrogate Threshold Effect (STE)
+
+Formula: **STE = (threshold_T - α) / β**
+
+Interpretation: Minimum surrogate effect required to predict a meaningful true endpoint benefit.
+
+---
+
+# Basic Workflow
+
+## 1. Load Package and Data
+
+```{r load, eval=FALSE}
+library(powerNMA)
+
+# Example: Cancer trials with PFS (surrogate) and OS (true endpoint)
+data <- data.frame(
+  study = c("TRIAL_001", "TRIAL_001", "TRIAL_002", "TRIAL_002",
+            "TRIAL_003", "TRIAL_003", "TRIAL_004", "TRIAL_005"),
+  treat1 = c("Placebo", "DrugA", "Placebo", "DrugB",
+             "DrugA", "Placebo", "DrugB", "DrugA"),
+  treat2 = c("DrugA", "DrugB", "DrugB", "DrugC",
+             "DrugC", "DrugC", "DrugC", "DrugB"),
+
+  # Surrogate: PFS hazard ratio (log scale)
+  pfs_loghr = c(-0.35, -0.28, -0.41, -0.22, -0.30, -0.38, -0.25, -0.32),
+  pfs_se = c(0.12, 0.15, 0.11, 0.14, 0.13, 0.12, 0.14, 0.13),
+
+  # True: OS hazard ratio (some studies still ongoing → NA)
+  os_loghr = c(-0.20, NA, -0.25, NA, -0.15, -0.22, NA, NA),
+  os_se = c(0.18, NA, 0.17, NA, 0.19, 0.18, NA, NA)
+)
+```
+
+**Key features**:
+- PFS available for all 8 comparisons (100%)
+- OS available for only 4 comparisons (50%) — typical for ongoing trials
+
+## 2. Build Surrogate Network
+
+```{r build_network, eval=FALSE}
+net <- build_surrogate_network(
+  data = data,
+  study = study,
+  treat1 = treat1,
+  treat2 = treat2,
+  S_eff = pfs_loghr,
+  S_se = pfs_se,
+  T_eff = os_loghr,
+  T_se = os_se
+)
+
+print(net)
+```
+
+Expected output:
+```
+Surrogate Network Meta-Analysis Data
+=====================================
+
+Studies: 5
+Treatments: 4 (DrugA, DrugB, DrugC, Placebo)
+Comparisons: 8
+
+Surrogate endpoint: n = 8
+True endpoint: n = 4 observed (50% of comparisons)
+```
+
+## 3. Fit Bivariate NMA
+
+```{r fit_nma, eval=FALSE}
+fit <- fit_bivariate_nma_freq(
+  net = net,
+  n_boot = 1000,           # Number of bootstrap samples
+  boot_method = "normal",  # or "student" for robustness
+  seed = 12345
+)
+
+print(fit)
+```
+
+Expected output:
+```
+Bivariate Network Meta-Analysis Fit
+====================================
+Engine: frequentist
+Treatments: 4
+Studies: 5
+
+Treatment Effects on Surrogate (dS):
+  Treatment  Effect
+    Placebo   0.000
+      DrugA  -0.350
+      DrugB  -0.280
+      DrugC  -0.220
+
+Treatment Effects on True Endpoint (dT):
+  Treatment  Effect  SUCRA
+    Placebo   0.000  0.000
+      DrugA  -0.280  0.950
+      DrugB  -0.224  0.750
+      DrugC  -0.176  0.550
+
+Surrogacy Parameters:
+  α (intercept): 0.050
+  β (slope): 0.800
+  → Strong surrogacy (β ≈ 1)
+```
+
+**Interpretation**:
+- DrugA shows best effects on both PFS and OS
+- β = 0.8 indicates good surrogacy (close to 1)
+- SUCRA ranks: DrugA (95%) > DrugB (75%) > DrugC (55%) > Placebo (0%)
+
+## 4. Compute Surrogate Threshold Effect
+
+```{r ste, eval=FALSE}
+ste <- compute_surrogate_threshold_effect(
+  alpha_draws = fit$surrogacy$alpha_draws,
+  beta_draws = fit$surrogacy$beta_draws,
+  threshold_T = 0.0,  # Non-inferiority margin for OS
+  conf_level = 0.95
+)
+
+print(ste)
+```
+
+Expected output:
+```
+Surrogate Threshold Effect (STE)
+================================
+True endpoint threshold: 0
+
+STE estimate:
+  Median: -0.062
+  Mean: -0.063
+  SD: 0.015
+  95% CI: [-0.092, -0.034]
+
+Interpretation:
+  Surrogate effects ≥ -0.062 likely indicate meaningful true endpoint benefit
+```
+
+**Clinical Interpretation**:
+- PFS hazard ratio ≤ 0.94 (exp(-0.062)) likely predicts OS benefit
+- Treatments with PFS HR < 0.94 have high probability of improving OS
+
+---
+
+# Advanced Features
+
+## Surrogacy Diagnostics
+
+Comprehensive validation of surrogate quality:
+
+```{r diagnostics, eval=FALSE}
+diag <- surrogacy_diagnostics(fit, conf_level = 0.95)
+print(diag)
+```
+
+Expected output:
+```
+Surrogacy Diagnostics
+=====================
+
+Surrogacy Parameters:
+  α (intercept): 0.050 [0.020, 0.080]
+  β (slope): 0.800 [0.720, 0.880]
+
+Trial-Level Validation:
+  R² (trial): 0.742
+  Correlation: 0.861
+  Observed pairs: 4 / 8
+
+Quality Assessment: Good (R² ≥ 0.6, β moderate)
+
+Surrogate Threshold Effect:
+  Median STE: -0.062
+  95% CI: [-0.092, -0.034]
+```
+
+**R² Interpretation**:
+- **R² = 0.742**: 74% of variance in OS effects explained by PFS effects
+- **Excellent**: R² ≥ 0.8
+- **Good**: 0.6 ≤ R² < 0.8
+- **Moderate**: 0.4 ≤ R² < 0.6
+- **Weak**: R² < 0.4
+
+## Stress Testing Surrogacy Assumptions
+
+Assess robustness of treatment rankings to surrogacy assumptions:
+
+```{r stress, eval=FALSE}
+stress <- stress_surrogacy(
+  fit,
+  r2_multipliers = c(0.5, 0.7, 0.9, 1.0),  # Vary R²
+  slope_shifts = c(-0.1, 0, 0.1)            # Vary β
+)
+
+print(stress)
+```
+
+Expected output:
+```
+Surrogacy Stress Analysis
+=========================
+Scenarios tested: 12
+Original SUCRA:
+DrugA   DrugB   DrugC Placebo
+0.950   0.750   0.550   0.000
+
+Stress test results (first 3 scenarios):
+
+R2=0.5_Slope-0.10:
+  POTH: 0.823
+  SUCRA range: [0.000, 0.887]
+
+R2=0.5_Slope+0.00:
+  POTH: 0.845
+  SUCRA range: [0.000, 0.921]
+
+R2=0.5_Slope+0.10:
+  POTH: 0.801
+  SUCRA range: [0.000, 0.895]
+
+Interpretation:
+  If rankings are stable across scenarios, surrogacy is robust.
+  Large ranking changes suggest sensitivity to surrogacy assumptions.
+```
+
+**POTH (Probability of Treatment Hierarchy)**:
+- POTH ≥ 0.9: Very certain ranking
+- 0.7 ≤ POTH < 0.9: Moderately certain
+- POTH < 0.7: Uncertain ranking
+
+## Visualizing Surrogacy
+
+Create scatter plot of S vs T with regression line:
+
+```{r plot, eval=FALSE}
+plot_surrogacy(fit, show_ci = TRUE)
+```
+
+This creates a plot showing:
+- Observed S-T pairs (points)
+- Surrogacy relationship line: T = α + β × S (red line)
+- 95% confidence band (shaded region)
+
+---
+
+# Multiple Surrogates: Surrogate Index
+
+When multiple surrogate endpoints are available, combine them using machine learning:
+
+## Example: Multiple Biomarkers
+
+```{r multiple_surrogates, eval=FALSE}
+# Data with 3 biomarkers predicting clinical outcome
+data_multi <- data.frame(
+  study = rep(paste0("S", 1:15), each = 2),
+  treat1 = rep(c("Control", "TreatA"), 15),
+  treat2 = rep(c("TreatA", "TreatB"), 15),
+
+  # Three surrogate biomarkers
+  biomarker1 = rnorm(30, 0.5, 0.2),
+  biomarker2 = rnorm(30, 0.4, 0.2),
+  biomarker3 = rnorm(30, 0.6, 0.2),
+  se_bio = rep(0.1, 30),
+
+  # Clinical outcome (partially observed)
+  clinical = c(rnorm(20, 0.3, 0.15), rep(NA, 10)),
+  se_clin = c(rep(0.15, 20), rep(NA, 10))
+)
+
+# Build network with multiple surrogates
+net_multi <- build_surrogate_network(
+  data = data_multi,
+  study = study,
+  treat1 = treat1,
+  treat2 = treat2,
+  S_eff = biomarker1,      # Primary surrogate (required)
+  S_se = se_bio,
+  T_eff = clinical,
+  T_se = se_clin,
+  S_multi = c("biomarker1", "biomarker2", "biomarker3")  # All surrogates
+)
+
+# Train Surrogate Index
+si_model <- train_surrogate_index(
+  net = net_multi,
+  method = "ridge",     # OLS, ridge, or pcr
+  standardize = TRUE,
+  seed = 999
+)
+
+cat("Surrogate Index R²:", si_model$r_squared, "\n")
+# Output: Surrogate Index R²: 0.68
+
+# Apply SI to augment network
+net_augmented <- apply_surrogate_index(net_multi, si_model)
+
+print(net_augmented)
+# Output includes: "Surrogate Index trained: ridge, R²: 0.68"
+
+# Fit bivariate NMA with combined surrogate
+fit_si <- fit_bivariate_nma_freq(net_augmented, n_boot = 1000)
+```
+
+**Methods**:
+- **OLS**: Ordinary least squares — simple, interpretable
+- **Ridge**: Regularized regression — handles multicollinearity
+- **PCR**: Principal component regression — reduces dimensionality
+
+---
+
+# Real-World Example: Oncology Trial
+
+## Scenario
+
+Meta-analysis of 12 randomized trials comparing novel cancer therapies:
+- **Surrogate**: Progression-Free Survival (PFS)
+- **True endpoint**: Overall Survival (OS)
+- **Challenge**: Only 7/12 trials have mature OS data
+
+```{r oncology_example, eval=FALSE}
+# Simulate realistic oncology data
+set.seed(2024)
+oncology_data <- data.frame(
+  study = c("NCT001", "NCT001", "NCT002", "NCT003", "NCT003",
+            "NCT004", "NCT005", "NCT005", "NCT006", "NCT007",
+            "NCT008", "NCT009"),
+  treat1 = c("Chemo", "Immuno", "Chemo", "Chemo", "Immuno",
+             "Chemo", "Chemo", "Target", "Immuno", "Chemo",
+             "Target", "Immuno"),
+  treat2 = c("Immuno", "Combo", "Immuno", "Immuno", "Combo",
+             "Target", "Target", "Combo", "Target", "Combo",
+             "Combo", "Combo"),
+
+  # PFS: All trials have data (mature quickly)
+  pfs_hr = c(0.72, 0.65, 0.68, 0.70, 0.61, 0.75, 0.78, 0.66,
+             0.73, 0.64, 0.69, 0.67),
+  pfs_se = runif(12, 0.08, 0.12),
+
+  # OS: Only 7 trials have data (long follow-up required)
+  os_hr = c(0.85, NA, 0.80, 0.83, NA, 0.88, 0.90, NA, 0.84, NA, NA, NA),
+  os_se = c(0.15, NA, 0.14, 0.16, NA, 0.17, 0.18, NA, 0.15, NA, NA, NA)
+)
+
+# Build network
+onc_net <- build_surrogate_network(
+  data = oncology_data,
+  study = study,
+  treat1 = treat1,
+  treat2 = treat2,
+  S_eff = log(pfs_hr),  # Log hazard ratios
+  S_se = pfs_se,
+  T_eff = log(os_hr),
+  T_se = os_se
+)
+
+# Fit bivariate NMA
+onc_fit <- fit_bivariate_nma_freq(
+  onc_net,
+  n_boot = 2000,
+  boot_method = "student",  # Robust to outliers
+  df = 5,
+  seed = 2024
+)
+
+# View results
+print(onc_fit)
+
+# Diagnostics
+onc_diag <- surrogacy_diagnostics(onc_fit)
+print(onc_diag)
+
+# Surrogate threshold
+onc_ste <- compute_surrogate_threshold_effect(
+  alpha_draws = onc_fit$surrogacy$alpha_draws,
+  beta_draws = onc_fit$surrogacy$beta_draws,
+  threshold_T = 0.0  # HR = 1 (no effect)
+)
+print(onc_ste)
+
+# Visualization
+plot_surrogacy(onc_fit, show_ci = TRUE)
+
+# Stress test
+onc_stress <- stress_surrogacy(onc_fit)
+print(onc_stress)
+```
+
+---
+
+# Interpretation Guidelines
+
+## When to Trust Surrogate Predictions
+
+**Strong Surrogacy** (high confidence):
+- R² ≥ 0.8
+- β close to 1 (0.8–1.2)
+- POTH ≥ 0.9 in stress testing
+- Narrow STE confidence intervals
+
+**Good Surrogacy** (moderate confidence):
+- R² 0.6–0.8
+- β moderate (0.5–0.8)
+- POTH 0.7–0.9
+- Stress testing shows stable rankings
+
+**Weak Surrogacy** (caution):
+- R² < 0.6
+- β < 0.5 or β > 1.5
+- POTH < 0.7
+- Large ranking changes in stress testing
+
+## Reporting Checklist
+
+When publishing surrogate NMA results, report:
+
+1. **Network structure**: Number of studies, treatments, comparisons
+2. **Data availability**: % of studies with true endpoint data
+3. **Surrogacy parameters**: α, β with 95% CI
+4. **Validation metrics**: R² trial, correlation
+5. **Surrogate Threshold Effect**: Median STE with 95% CI
+6. **Sensitivity analysis**: Stress test results
+7. **Visualization**: Surrogacy scatter plot
+8. **Clinical interpretation**: Treatment rankings and recommendations
+
+---
+
+# Comparison with Standard NMA
+
+## Advantages of Surrogate NMA
+
+| Aspect | Standard NMA | Surrogate NMA |
+|--------|--------------|---------------|
+| **Data requirements** | Requires true endpoint for all | Uses surrogate to fill gaps |
+| **Precision** | Lower with sparse T data | Higher by leveraging S data |
+| **Treatment coverage** | Limited to trials with T | Full network via S bridging |
+| **Early decisions** | Wait for mature T data | Use early S data |
+| **Uncertainty** | Only sampling uncertainty | Adds surrogacy uncertainty |
+
+## When to Use Surrogate NMA
+
+**Ideal scenarios**:
+- Many trials have surrogate but few have true endpoint
+- True endpoint requires long follow-up
+- Strong biological rationale for S→T relationship
+- Prior evidence of good surrogacy (R² ≥ 0.6)
+
+**Not recommended**:
+- Most trials have true endpoint data (use standard NMA)
+- Weak or unknown surrogacy (R² < 0.4)
+- No studies with both S and T (cannot estimate α, β)
+
+---
+
+# Technical Details
+
+## Statistical Methods
+
+### Frequentist Bivariate NMA
+
+1. **Fit surrogate NMA**: Weighted least squares on S effects
+2. **Fit true endpoint NMA**: WLS on observed T effects
+3. **Estimate surrogacy**: Deming regression (accounts for measurement error)
+4. **Bootstrap**: Parametric resampling for uncertainty
+5. **Predict T from S**: δ_T = α + β × δ_S
+
+### Bootstrap Methods
+
+- **Normal**: Standard parametric bootstrap (default)
+- **Student-t**: Robust to non-normality (recommended for small samples)
+
+### Surrogate Index
+
+- **OLS**: `lm(T ~ S1 + S2 + S3)`
+- **Ridge**: `glmnet(X, Y, alpha = 0)` with cross-validated λ
+- **PCR**: `pcr(T ~ ., validation = "CV")` with optimal components
+
+---
+
+# FAQ
+
+## Q: What if I have no true endpoint data yet?
+
+**A**: You cannot fit bivariate NMA without at least 3 studies with both S and T. Wait for more data or use standard NMA on surrogate only.
+
+## Q: Can I use multiple true endpoints?
+
+**A**: Currently, only single S and single T are supported. For multiple T, fit separate models.
+
+## Q: How many bootstrap samples should I use?
+
+**A**:
+- Exploratory: 100–500
+- Final analysis: 1000–2000
+- High precision: 5000+
+
+## Q: Should I use normal or Student-t bootstrap?
+
+**A**: Student-t is more robust to outliers and non-normality. Use it when:
+- Small number of studies (< 20)
+- Suspected outliers
+- Non-normal effect distributions
+
+## Q: Can I use Bayesian methods?
+
+**A**: Bayesian bivariate NMA is planned for v3.2 using Stan/cmdstanr.
+
+---
+
+# References
+
+1. **Buyse M, Molenberghs G, Burzykowski T, et al. (2000)**. "The validation of surrogate endpoints in meta-analyses of randomized experiments." *Biostatistics*, 1(1):49-67.
+
+2. **Burzykowski T, Molenberghs G, Buyse M (2005)**. *The Evaluation of Surrogate Endpoints*. Springer, New York.
+
+3. **Prentice RL (1989)**. "Surrogate endpoints in clinical trials: definition and operational criteria." *Statistics in Medicine*, 8(4):431-440.
+
+4. **Daniels MJ, Hughes MD (1997)**. "Meta-analysis for the evaluation of potential surrogate markers." *Statistics in Medicine*, 16(17):1965-1982.
+
+5. **Freeman SC, Carpenter JR, Unger B, et al. (2023)**. "A Bayesian framework for simultaneous bivariate meta-analysis of two correlated outcomes." *Statistics in Medicine*, 42(20):3455-3470.
+
+6. **Bujkiewicz S, et al. (2019)**. "Bivariate network meta-analysis for surrogate endpoint evaluation." *Statistics in Medicine*, 38(18):3322-3341.
+
+---
+
+# Appendix: Function Reference
+
+## Core Functions
+
+- `build_surrogate_network()`: Create surrogate network data structure
+- `fit_bivariate_nma_freq()`: Frequentist bivariate NMA
+- `compute_surrogate_threshold_effect()`: Calculate STE
+
+## Surrogate Index
+
+- `train_surrogate_index()`: Train SI from multiple surrogates
+- `apply_surrogate_index()`: Apply trained SI to network
+
+## Diagnostics
+
+- `surrogacy_diagnostics()`: R² and validation metrics
+- `stress_surrogacy()`: Sensitivity analysis
+- `compute_poth()`: Probability of treatment hierarchy
+- `plot_surrogacy()`: Visualization
+
+## Class Methods
+
+- `print.surrogate_network()`: Print network summary
+- `print.bivariate_nma_fit()`: Print fit results
+- `print.surrogate_threshold_effect()`: Print STE
+- `print.surrogacy_diagnostics()`: Print diagnostics
+- `print.stress_analysis()`: Print stress test results
+
+---
+
+**Session Info**:
+```{r session_info, eval=FALSE}
+sessionInfo()
+```

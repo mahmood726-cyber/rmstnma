@@ -42,6 +42,8 @@ S3method(plot,bma_nma)
 S3method(print,surrogate_network)
 S3method(print,bivariate_nma_fit)
 S3method(print,surrogate_threshold_effect)
+S3method(print,surrogacy_diagnostics)
+S3method(print,stress_analysis)
 
 # Automatic pathways
 S3method(print,auto_standard_nma)
@@ -98,6 +100,10 @@ export(train_surrogate_index)
 export(apply_surrogate_index)
 export(compute_surrogate_threshold_effect)
 export(fit_bivariate_nma_freq)
+export(surrogacy_diagnostics)
+export(stress_surrogacy)
+export(compute_poth)
+export(plot_surrogacy)
 
 # Automatic pathways
 export(auto_standard_nma)
