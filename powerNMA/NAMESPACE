@@ -38,6 +38,11 @@ S3method(print,bma_nma)
 S3method(summary,bma_nma)
 S3method(plot,bma_nma)
 
+# Surrogate endpoint methods (2025 - integrated from surroNMA)
+S3method(print,surrogate_network)
+S3method(print,bivariate_nma_fit)
+S3method(print,surrogate_threshold_effect)
+
 # Automatic pathways
 S3method(print,auto_standard_nma)
 S3method(summary,auto_standard_nma)
@@ -86,6 +91,13 @@ export(cross_design_synthesis)
 export(threshold_analysis)
 export(itr_from_nma)
 export(model_averaging_nma)
+
+# Surrogate endpoint methods (2025 - integrated from surroNMA)
+export(build_surrogate_network)
+export(train_surrogate_index)
+export(apply_surrogate_index)
+export(compute_surrogate_threshold_effect)
+export(fit_bivariate_nma_freq)
 
 # Automatic pathways
 export(auto_standard_nma)
