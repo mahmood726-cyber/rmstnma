@@ -2,16 +2,26 @@
 #'
 #' Creates simulated IPD for testing and examples
 #'
-#' @param n_trials Number of trials
-#' @param n_per_arm Sample size per arm
-#' @param seed Random seed
+#' @param n_trials Number of trials (positive integer)
+#' @param n_per_arm Sample size per arm (positive integer)
+#' @param seed Random seed (integer or NULL for no seed)
 #' @return Data frame with simulated IPD
 #' @export
 #' @examples
 #' ipd <- generate_example_ipd(n_trials = 3, n_per_arm = 50)
 #' head(ipd)
 generate_example_ipd <- function(n_trials = 5, n_per_arm = 100, seed = 42) {
-  set.seed(seed)
+  # Input validation
+  assert_positive_integer(n_trials, "n_trials", "generate_example_ipd")
+  assert_positive_integer(n_per_arm, "n_per_arm", "generate_example_ipd")
+
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1 || !is.finite(seed)) {
+      stop("[generate_example_ipd] Argument 'seed' must be a single numeric value or NULL",
+           call. = FALSE)
+    }
+    set.seed(seed)
+  }
 
   treatments <- c("Control", "DrugA", "DrugB", "DrugC", "DrugD")
   true_eff <- c(Control = 0, DrugA = log(0.85), DrugB = log(0.75),
@@ -63,15 +73,24 @@ generate_example_ipd <- function(n_trials = 5, n_per_arm = 100, seed = 42) {
 #'
 #' Creates realistic network meta-analysis data with covariates
 #'
-#' @param n_studies Number of studies
-#' @param seed Random seed
+#' @param n_studies Number of studies (positive integer)
+#' @param seed Random seed (integer or NULL for no seed)
 #' @return Data frame with pairwise comparisons and covariates
 #' @export
 #' @examples
 #' data <- simulate_nma_data(n_studies = 40)
 #' head(data)
 simulate_nma_data <- function(n_studies = 40, seed = 42) {
-  set.seed(seed)
+  # Input validation
+  assert_positive_integer(n_studies, "n_studies", "simulate_nma_data")
+
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1 || !is.finite(seed)) {
+      stop("[simulate_nma_data] Argument 'seed' must be a single numeric value or NULL",
+           call. = FALSE)
+    }
+    set.seed(seed)
+  }
 
   treatments <- c("Placebo", "DrugA", "DrugB", "DrugC", "DrugD")
   true_eff <- c(Placebo = 0, DrugA = log(0.85), DrugB = log(0.75),

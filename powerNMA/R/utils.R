@@ -56,6 +56,117 @@ vcoalesce <- function(x, val = 0) {
   out
 }
 
+#' Validate that argument is not NULL
+#' @param x Value to check
+#' @param arg_name Name of the argument
+#' @param func_name Name of the calling function
+#' @keywords internal
+assert_not_null <- function(x, arg_name, func_name = "") {
+  if (is.null(x)) {
+    context <- if (nchar(func_name) > 0) sprintf("[%s] ", func_name) else ""
+    stop(sprintf("%sArgument '%s' cannot be NULL", context, arg_name),
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Validate that argument is a data frame
+#' @param x Value to check
+#' @param arg_name Name of the argument
+#' @param func_name Name of the calling function
+#' @param allow_empty Allow empty data frames
+#' @keywords internal
+assert_data_frame <- function(x, arg_name, func_name = "", allow_empty = FALSE) {
+  context <- if (nchar(func_name) > 0) sprintf("[%s] ", func_name) else ""
+
+  if (!is.data.frame(x)) {
+    stop(sprintf("%sArgument '%s' must be a data.frame, got %s",
+                 context, arg_name, class(x)[1]),
+         call. = FALSE)
+  }
+
+  if (!allow_empty && nrow(x) == 0) {
+    stop(sprintf("%sArgument '%s' cannot be an empty data frame",
+                 context, arg_name),
+         call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
+#' Validate that argument is numeric
+#' @param x Value to check
+#' @param arg_name Name of the argument
+#' @param func_name Name of the calling function
+#' @param min_value Minimum allowed value (inclusive)
+#' @param max_value Maximum allowed value (inclusive)
+#' @keywords internal
+assert_numeric <- function(x, arg_name, func_name = "",
+                          min_value = -Inf, max_value = Inf) {
+  context <- if (nchar(func_name) > 0) sprintf("[%s] ", func_name) else ""
+
+  if (!is.numeric(x)) {
+    stop(sprintf("%sArgument '%s' must be numeric, got %s",
+                 context, arg_name, class(x)[1]),
+         call. = FALSE)
+  }
+
+  if (any(!is.finite(x))) {
+    stop(sprintf("%sArgument '%s' contains non-finite values",
+                 context, arg_name),
+         call. = FALSE)
+  }
+
+  if (!all(x >= min_value & x <= max_value)) {
+    stop(sprintf("%sArgument '%s' must be in range [%g, %g]",
+                 context, arg_name, min_value, max_value),
+         call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
+#' Validate that argument is a positive integer
+#' @param x Value to check
+#' @param arg_name Name of the argument
+#' @param func_name Name of the calling function
+#' @keywords internal
+assert_positive_integer <- function(x, arg_name, func_name = "") {
+  context <- if (nchar(func_name) > 0) sprintf("[%s] ", func_name) else ""
+
+  if (!is.numeric(x) || length(x) != 1) {
+    stop(sprintf("%sArgument '%s' must be a single numeric value",
+                 context, arg_name),
+         call. = FALSE)
+  }
+
+  if (!is.finite(x) || x < 1 || x != floor(x)) {
+    stop(sprintf("%sArgument '%s' must be a positive integer, got %g",
+                 context, arg_name, x),
+         call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
+#' Validate required columns exist in data frame
+#' @param data Data frame to check
+#' @param required_cols Vector of required column names
+#' @param func_name Name of the calling function
+#' @keywords internal
+assert_columns_exist <- function(data, required_cols, func_name = "") {
+  context <- if (nchar(func_name) > 0) sprintf("[%s] ", func_name) else ""
+
+  missing_cols <- setdiff(required_cols, names(data))
+  if (length(missing_cols) > 0) {
+    stop(sprintf("%sMissing required columns: %s",
+                 context, paste(missing_cols, collapse = ", ")),
+         call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
 #' Simple memoization cache
 #' @keywords internal
 .powernma_cache <- new.env(parent = emptyenv())
@@ -97,23 +208,39 @@ clear_powernma_cache <- function() {
 #' validate_ipd(ipd)
 #' }
 validate_ipd <- function(ipd) {
+  # Enhanced validation with better error messages
+  assert_not_null(ipd, "ipd", "validate_ipd")
+  assert_data_frame(ipd, "ipd", "validate_ipd", allow_empty = FALSE)
+
   required_cols <- c("trial", "treatment", "time", "status")
+  assert_columns_exist(ipd, required_cols, "validate_ipd")
 
-  if (!all(required_cols %in% names(ipd))) {
-    missing <- setdiff(required_cols, names(ipd))
-    stop(paste("Missing required columns:", paste(missing, collapse = ", ")))
-  }
-
+  # Type validation
   if (!is.numeric(ipd$time)) {
-    stop("Column 'time' must be numeric")
+    stop("[validate_ipd] Column 'time' must be numeric, got ",
+         class(ipd$time)[1], call. = FALSE)
   }
 
-  if (!all(ipd$status %in% c(0, 1))) {
-    stop("Column 'status' must contain only 0 and 1")
+  # Status column validation
+  if (!all(ipd$status %in% c(0, 1, NA))) {
+    invalid_vals <- unique(ipd$status[!ipd$status %in% c(0, 1, NA)])
+    stop(sprintf("[validate_ipd] Column 'status' must contain only 0 and 1, found: %s",
+                 paste(invalid_vals, collapse = ", ")),
+         call. = FALSE)
   }
 
+  # Negative time check
   if (any(ipd$time < 0, na.rm = TRUE)) {
-    warning("Negative time values detected")
+    n_negative <- sum(ipd$time < 0, na.rm = TRUE)
+    warning(sprintf("[validate_ipd] Detected %d negative time values", n_negative),
+            call. = FALSE)
+  }
+
+  # NA check
+  if (any(is.na(ipd$time))) {
+    n_na <- sum(is.na(ipd$time))
+    warning(sprintf("[validate_ipd] Detected %d NA values in time column", n_na),
+            call. = FALSE)
   }
 
   TRUE
@@ -127,19 +254,42 @@ validate_ipd <- function(ipd) {
 #' @return `TRUE` if validation passes
 #' @export
 validate_nma_input <- function(data) {
-  need <- c("studlab", "treat1", "treat2", "TE", "seTE")
-  miss <- setdiff(need, names(data))
+  # Enhanced validation with better error messages
+  assert_not_null(data, "data", "validate_nma_input")
+  assert_data_frame(data, "data", "validate_nma_input", allow_empty = FALSE)
 
-  if (length(miss)) {
-    stop("Input data missing columns: ", paste(miss, collapse = ", "))
+  # Check required columns
+  required_cols <- c("studlab", "treat1", "treat2", "TE", "seTE")
+  assert_columns_exist(data, required_cols, "validate_nma_input")
+
+  # Validate TE column
+  if (any(!is.finite(data$TE))) {
+    n_bad <- sum(!is.finite(data$TE))
+    stop(sprintf("[validate_nma_input] Column 'TE' contains %d non-finite values (Inf, -Inf, or NA)",
+                 n_bad),
+         call. = FALSE)
   }
 
-  if (any(!is.finite(data$TE) | !is.finite(data$seTE))) {
-    stop("TE/seTE contain non-finite values.")
+  # Validate seTE column
+  if (any(!is.finite(data$seTE))) {
+    n_bad <- sum(!is.finite(data$seTE))
+    stop(sprintf("[validate_nma_input] Column 'seTE' contains %d non-finite values (Inf, -Inf, or NA)",
+                 n_bad),
+         call. = FALSE)
   }
 
   if (any(data$seTE <= 0, na.rm = TRUE)) {
-    stop("seTE must be strictly positive.")
+    n_bad <- sum(data$seTE <= 0, na.rm = TRUE)
+    min_val <- min(data$seTE[data$seTE <= 0], na.rm = TRUE)
+    stop(sprintf("[validate_nma_input] Column 'seTE' must be strictly positive. Found %d values <= 0 (min: %g)",
+                 n_bad, min_val),
+         call. = FALSE)
+  }
+
+  # Check for sufficient data
+  if (nrow(data) < 2) {
+    stop("[validate_nma_input] Need at least 2 comparisons for network meta-analysis",
+         call. = FALSE)
   }
 
   invisible(TRUE)
