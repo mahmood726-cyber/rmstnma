@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  # powerNMA Shiny App
+  powernma-app:
+    build:
+      context: ../..
+      dockerfile: inst/docker/Dockerfile
+    container_name: powernma-app
+    ports:
+      - "3838:3838"  # Shiny app
+      - "8000:8000"  # REST API
+      - "11434:11434"  # Ollama
+    volumes:
+      - powernma-data:/srv/shiny-server/powernma/data
+      - powernma-results:/srv/shiny-server/powernma/results
+      - powernma-cache:/srv/shiny-server/powernma/cache
+      - powernma-logs:/srv/shiny-server/powernma/logs
+    environment:
+      - POWERNMA_DATA_DIR=/srv/shiny-server/powernma/data
+      - POWERNMA_RESULTS_DIR=/srv/shiny-server/powernma/results
+      - POWERNMA_DB_HOST=powernma-db
+      - POWERNMA_DB_PORT=5432
+      - POWERNMA_DB_NAME=powernma
+      - POWERNMA_DB_USER=powernma
+      - POWERNMA_DB_PASSWORD=powernma_secure_password
+      - POWERNMA_MAX_UPLOAD_MB=500
+      - POWERNMA_N_WORKERS=4
+      - POWERNMA_ENABLE_API=true
+      - POWERNMA_ENABLE_COLLABORATION=true
+    depends_on:
+      - powernma-db
+      - powernma-redis
+    networks:
+      - powernma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3838/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL Database
+  powernma-db:
+    image: postgres:15-alpine
+    container_name: powernma-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - powernma-postgres:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    environment:
+      - POSTGRES_DB=powernma
+      - POSTGRES_USER=powernma
+      - POSTGRES_PASSWORD=powernma_secure_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    networks:
+      - powernma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powernma"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (for real-time collaboration)
+  powernma-redis:
+    image: redis:7-alpine
+    container_name: powernma-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - powernma-redis:/data
+    command: redis-server --appendonly yes --requirepass powernma_redis_password
+    networks:
+      - powernma-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx Reverse Proxy
+  powernma-nginx:
+    image: nginx:alpine
+    container_name: powernma-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - powernma-logs:/var/log/nginx
+    depends_on:
+      - powernma-app
+    networks:
+      - powernma-network
+    restart: unless-stopped
+
+  # Ollama Service (for AI features)
+  powernma-ollama:
+    image: ollama/ollama:latest
+    container_name: powernma-ollama
+    ports:
+      - "11435:11434"
+    volumes:
+      - powernma-ollama:/root/.ollama
+    networks:
+      - powernma-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  powernma-data:
+    driver: local
+  powernma-results:
+    driver: local
+  powernma-cache:
+    driver: local
+  powernma-logs:
+    driver: local
+  powernma-postgres:
+    driver: local
+  powernma-redis:
+    driver: local
+  powernma-ollama:
+    driver: local
+
+networks:
+  powernma-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
