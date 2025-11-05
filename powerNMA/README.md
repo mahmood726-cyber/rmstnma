@@ -36,6 +36,53 @@
    - Network geometry metrics
    - Convergence diagnostics for Bayesian models
 
+### Advanced Methods (Phases 12-14)
+
+#### Phase 12: Advanced Bayesian & External Integration
+- **Stan-based Bayesian NMA** - Full HMC/NUTS sampling with comprehensive diagnostics
+- **IPD Network Meta-Analysis** - One-stage and two-stage approaches with personalized predictions
+- **Diagnostic Test Accuracy NMA** - Bivariate models, HSROC curves, sensitivity/specificity
+- **Interactive HTML Reports** - Self-contained R Markdown reports with Plotly/DT
+- **External API Integration** - Automated PubMed and ClinicalTrials.gov data retrieval
+- **Advanced Meta-Regression** - Restricted cubic splines and fractional polynomials
+
+#### Phase 13: Cutting-Edge Statistical Methods (2024-2025)
+- **Multivariate NMA** - Joint efficacy + safety modeling with within-study correlations
+- **Benefit-Risk MCDA** - Multi-criteria decision analysis with SMAA
+- **ROPE Analysis** - Region of Practical Equivalence (Bayesian and frequentist)
+- **TOST & Equivalence** - Two One-Sided Tests for non-inferiority
+- **Transitivity Testing** - Network coherence and assumption validation
+- **RWE Integration** - RCT + real-world evidence synthesis with power priors
+- **Sequential NMA** - Trial Sequential Analysis and living network meta-analysis
+- **Treatment Selection** - Precision medicine algorithms for optimal treatment choice
+
+#### Phase 14: Deep Learning & Causal Inference (REVOLUTIONARY!)
+- **Graph Neural Networks** - GNN/GCN/GAT/GraphSAGE for network structure learning
+  - Treatment embeddings and representation learning
+  - Link prediction for missing comparisons
+  - Transfer learning across disease areas
+  - GNN-based treatment clustering
+- **Causal Inference Framework** - Rigorous causal effect estimation
+  - G-formula for causal effects
+  - Targeted Maximum Likelihood Estimation (TMLE)
+  - Doubly robust estimation
+  - E-values for unmeasured confounding sensitivity
+- **Distributional NMA** - Beyond mean effects to full distributions
+  - Quantile regression network meta-analysis
+  - Distribution reconstruction from summary statistics
+- **Competing Risks NMA** - Multi-event time-to-event analysis
+  - Cause-specific hazards models
+  - Fine-Gray subdistribution hazards
+  - Multi-state transition models
+- **Special Trial Designs** - Crossover and N-of-1 trials
+  - Within-patient correlation modeling
+  - Carryover effect adjustment
+  - N-of-1 trial aggregation
+- **Finite Mixture Models** - Subgroup discovery without pre-specification
+  - Latent class analysis for treatment response
+  - Growth mixture models for longitudinal outcomes
+  - Responder vs non-responder identification
+
 ## Installation
 
 ```r
