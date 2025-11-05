@@ -33,7 +33,66 @@ A production-ready R package that unifies two sophisticated approaches:
 - **Sensitivity Analyses** - LOO, LOTO, inconsistency testing
 - **ML Heterogeneity** - Machine learning effect modifier exploration
 
-### 🆕 Phase 5: Advanced Statistical Methods (NEW!)
+###  🚀 Phase 6: Ultimate NMA Capabilities (LATEST!)
+
+**CINeMA Confidence Assessment**
+- 6-domain confidence evaluation framework (Nikolakopoulou et al. 2020)
+- Within-study bias, reporting bias, indirectness assessments
+- Imprecision, heterogeneity, and incoherence evaluation
+- Overall confidence ratings (High/Moderate/Low/Very Low)
+- Traffic light plots for visual assessment
+- Contribution matrix analysis
+- Automated recommendations
+
+**Bayesian Model Selection**
+- DIC (Deviance Information Criterion)
+- WAIC (Watanabe-Akaike Information Criterion)
+- LOOIC with Pareto Smoothed Importance Sampling
+- Model comparison across multiple specifications
+- Support for gemtc, rjags, and Stan models
+- Effective parameters calculation
+- Model selection guidance
+
+**Enhanced Meta-Regression & Subgroups**
+- Network meta-regression with continuous/categorical covariates
+- Treatment-covariate interaction testing
+- Subgroup network meta-analysis with Q-test
+- Dose-response meta-regression (linear, log, quadratic, Emax)
+- Visual regression plots
+- Fixed vs random effects meta-regression
+- Robust variance estimation
+
+**Automated Report Generation**
+- Word/PDF/HTML reports via rmarkdown
+- Executive summaries with key findings
+- Comprehensive methods sections
+- Results with statistical interpretations
+- Embedded tables and figures
+- Discussion and conclusions
+- Quick summary reports (one-page)
+- Customizable templates (standard/brief/detailed)
+- Publication-ready formatting
+
+**Risk of Bias Integration**
+- Cochrane RoB 2 tool support (RCTs)
+- ROBINS-I tool support (observational)
+- Traffic light visualization plots
+- Sensitivity analysis excluding high-risk studies
+- Down-weighting by study quality
+- Domain-specific summaries
+- Overall quality assessment
+- Template generation for assessments
+
+**Comprehensive Sensitivity Analysis**
+- Leave-one-out analysis (LOO) with influence statistics
+- Study influence diagnostics
+- Cumulative meta-analysis (temporal trends)
+- Fixed vs random effects comparison
+- Study exclusion by quality criteria
+- Robustness assessment across assumptions
+- Visual sensitivity plots
+
+### 🆕 Phase 5: Advanced Statistical Methods
 
 **Treatment Rankings & SUCRA**
 - SUCRA scores (Surface Under Cumulative Ranking)
