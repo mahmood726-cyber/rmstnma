@@ -121,8 +121,8 @@ run_powernma <- function(data,
     saveRDS(results, output_file)
     msg("Results saved to: %s", output_file)
 
-    # Export mode-specific tables
-    export_powernma_tables_v2(results, config$output_dir)
+    # Export tables using unified function
+    export_powernma_tables_unified(results, config$output_dir, verbose = TRUE)
   }
 
   # ========== FINALIZE ==========
@@ -230,76 +230,118 @@ create_powernma_summary <- function(results, ref_treatment, sm) {
   summary
 }
 
-#' Export key tables
+#' Export Results Tables (Unified)
+#'
+#' Consolidated export function handling both standard and experimental modes.
+#' Replaces the old export_powernma_tables() and export_powernma_tables_v2()
+#' functions with a single, more maintainable implementation.
+#'
+#' @param results powerNMA results object
+#' @param dir Output directory path
+#' @param verbose Print export messages
 #' @keywords internal
-export_powernma_tables <- function(results, dir) {
-  # P-scores
-  if (!is.null(results$summary$top5_pscore)) {
-    readr::write_csv(
-      results$summary$top5_pscore,
-      file.path(dir, "pscores.csv")
-    )
+export_powernma_tables_unified <- function(results, dir, verbose = TRUE) {
+  # Validate inputs
+  if (!dir.exists(dir)) {
+    dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   }
 
-  # LOO results
-  if (!is.null(results$loo)) {
-    readr::write_csv(
-      results$loo,
-      file.path(dir, "loo_sensitivity.csv")
-    )
-  }
-
-  msg("Tables exported to: %s", dir)
-}
-
-#' Export mode-specific tables (v2)
-#' @keywords internal
-export_powernma_tables_v2 <- function(results, dir) {
   mode <- results$mode %||% "standard"
+  exported_files <- character()
 
-  if (mode == "standard") {
-    # Export standard NMA results
-    if (!is.null(results$network)) {
-      # Network estimates
+  # Helper to safely export a table
+  safe_export <- function(data, filename, description) {
+    if (!is.null(data)) {
+      filepath <- file.path(dir, filename)
       tryCatch({
-        estimates <- data.frame(
+        readr::write_csv(data, filepath)
+        exported_files <<- c(exported_files, description)
+        if (verbose) msg("Exported: %s", description)
+      }, error = function(e) {
+        warning(sprintf("Failed to export %s: %s", description, e$message))
+      })
+    }
+  }
+
+  # Common exports (both modes)
+  if (!is.null(results$summary$top5_pscore)) {
+    safe_export(results$summary$top5_pscore, "top_treatments.csv", "Top 5 treatments (P-scores)")
+  }
+
+  # Mode-specific exports
+  if (mode == "standard") {
+    # Standard NMA exports
+    if (!is.null(results$network)) {
+      estimates <- tryCatch({
+        data.frame(
           treatment = results$network$trts,
           TE_fixed = results$network$TE.fixed,
           seTE_fixed = results$network$seTE.fixed,
           TE_random = results$network$TE.random,
-          seTE_random = results$network$seTE.random
+          seTE_random = results$network$seTE.random,
+          stringsAsFactors = FALSE
         )
-        readr::write_csv(estimates, file.path(dir, "network_estimates.csv"))
       }, error = function(e) NULL)
+
+      if (!is.null(estimates)) {
+        safe_export(estimates, "network_estimates.csv", "Network effect estimates")
+      }
     }
 
-    # Sensitivity results
     if (!is.null(results$sensitivity)) {
-      readr::write_csv(results$sensitivity, file.path(dir, "loo_sensitivity.csv"))
+      safe_export(results$sensitivity, "loo_sensitivity.csv", "Leave-one-out sensitivity")
+    }
+
+    if (!is.null(results$geometry)) {
+      safe_export(results$geometry, "network_geometry.csv", "Network geometry metrics")
     }
 
   } else {
-    # Export experimental results
+    # Experimental mode exports
     if (!is.null(results$rmst)) {
-      readr::write_csv(results$rmst$data, file.path(dir, "rmst_results.csv"))
+      safe_export(results$rmst$data, "rmst_results.csv", "RMST NMA results")
     }
 
     if (!is.null(results$milestone)) {
-      readr::write_csv(results$milestone$data, file.path(dir, "milestone_results.csv"))
+      safe_export(results$milestone$data, "milestone_results.csv", "Milestone survival results")
     }
 
     if (!is.null(results$transportability)) {
-      readr::write_csv(
-        data.frame(weight = results$transportability$weights),
-        file.path(dir, "transportability_weights.csv")
+      weights_df <- data.frame(
+        study = names(results$transportability$weights),
+        weight = as.numeric(results$transportability$weights),
+        stringsAsFactors = FALSE
       )
+      safe_export(weights_df, "transportability_weights.csv", "Transportability weights")
     }
 
     if (!is.null(results$publication_bias)) {
-      readr::write_csv(results$publication_bias,
-                      file.path(dir, "publication_bias.csv"))
+      safe_export(results$publication_bias, "publication_bias.csv", "Publication bias assessment")
+    }
+
+    if (!is.null(results$loto)) {
+      safe_export(results$loto, "loto_sensitivity.csv", "Leave-one-treatment-out sensitivity")
     }
   }
 
-  msg("Tables exported to: %s", dir)
+  # Summary message
+  if (verbose && length(exported_files) > 0) {
+    msg("Successfully exported %d table(s) to: %s", length(exported_files), dir)
+  }
+
+  invisible(exported_files)
+}
+
+#' @keywords internal
+#' @deprecated Use export_powernma_tables_unified() instead
+export_powernma_tables <- function(results, dir) {
+  .Deprecated("export_powernma_tables_unified")
+  export_powernma_tables_unified(results, dir, verbose = TRUE)
+}
+
+#' @keywords internal
+#' @deprecated Use export_powernma_tables_unified() instead
+export_powernma_tables_v2 <- function(results, dir) {
+  .Deprecated("export_powernma_tables_unified")
+  export_powernma_tables_unified(results, dir, verbose = TRUE)
 }
