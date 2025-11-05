@@ -33,6 +33,63 @@ A production-ready R package that unifies two sophisticated approaches:
 - **Sensitivity Analyses** - LOO, LOTO, inconsistency testing
 - **ML Heterogeneity** - Machine learning effect modifier exploration
 
+### 🆕 Phase 5: Advanced Statistical Methods (NEW!)
+
+**Treatment Rankings & SUCRA**
+- SUCRA scores (Surface Under Cumulative Ranking)
+- Probability matrices for pairwise comparisons
+- Rank-o-grams and cumulative ranking curves
+- Multi-outcome ranking comparisons
+
+**Inconsistency Assessment**
+- Node-splitting analysis (Dias et al. 2010)
+- Design-by-treatment interaction models
+- Loop inconsistency testing (Bucher's method)
+- Automated inconsistency detection
+
+**Comprehensive Visualization**
+- Network diagrams with customizable layouts
+- Forest plots sorted by SUCRA or effect size
+- Comparison-adjusted funnel plots
+- Contour-enhanced funnel plots
+- Net heat plots for inconsistency
+- Interval plots with prediction intervals
+
+**Heterogeneity Analysis**
+- I² and τ² statistics with interpretation
+- Prediction intervals for future studies
+- Variance decomposition (within/between studies)
+- Comparison-specific heterogeneity
+- Visual heterogeneity plots
+
+**League Tables**
+- Publication-ready league tables
+- Multiple format options (effect+CI, full)
+- Probability matrices
+- Export to CSV/Excel/text
+- Heatmap visualizations
+
+**Publication Bias Tools**
+- Comparison-adjusted Egger's test
+- Comparison-adjusted Begg's test
+- Design-by-comparison interaction testing
+- Contour-enhanced funnel plots
+- Comprehensive bias reports
+
+**Effect Size Conversions**
+- OR ↔ RR conversions with baseline risk
+- Cohen's d ↔ Hedges' g with bias correction
+- MD ↔ SMD transformations
+- Fisher's z transformations for correlations
+- Number Needed to Treat (NNT) calculations
+- Batch conversion utilities
+
+**Comprehensive Analysis Pipeline**
+- One-function complete analysis: `run_comprehensive_nma()`
+- Automated assessment of all quality indicators
+- Publication-ready outputs (plots, tables, reports)
+- Integrated diagnostics and recommendations
+
 ### Quick Start
 
 ```r
@@ -290,6 +347,107 @@ tryCatch({
 })
 
 # Fix the data based on the error message, then proceed
+```
+
+### Example 7: 🆕 Comprehensive NMA with All Phase 5 Features (NEW!)
+
+```r
+library(powerNMA)
+
+# Load your data
+data <- simulate_nma_data(n_studies = 30)
+
+# Run comprehensive analysis with ALL advanced features
+results <- run_comprehensive_nma(
+  data = data,
+  sm = "OR",
+  small_values_good = TRUE,  # For adverse events/mortality
+  assess_inconsistency = TRUE,
+  assess_publication_bias = TRUE,
+  generate_plots = TRUE,
+  output_dir = "comprehensive_results"
+)
+
+# Automatically generates:
+# • Treatment rankings (SUCRA scores)
+# • Inconsistency assessment (node-splitting, design inconsistency)
+# • Heterogeneity analysis (I², τ², prediction intervals)
+# • Publication bias tests (Egger, Begg)
+# • League table (all pairwise comparisons)
+# • Network geometry metrics
+# • Complete visualization suite (8+ plots)
+# • Comprehensive written reports
+
+# Access components
+print(results$rankings)          # SUCRA scores and rankings
+print(results$heterogeneity)     # Heterogeneity report
+print(results$node_splitting)    # Inconsistency tests
+print(results$pub_bias)          # Publication bias assessment
+print(results$league_table)      # League table
+
+# View plots
+results$plots$network            # Network diagram
+results$plots$forest             # Forest plot
+results$plots$rankogram          # Rank-o-gram
+results$plots$sucra_scores       # SUCRA bar plot
+
+# Everything saved to output_dir automatically!
+```
+
+### Example 8: 🆕 Individual Phase 5 Features
+
+```r
+library(powerNMA)
+
+# Run standard NMA first
+data <- simulate_nma_data(n_studies = 30)
+nma <- netmeta::netmeta(TE, seTE, treat1, treat2, studlab,
+                        data = data, sm = "OR")
+
+# 1. Treatment Rankings
+sucra <- calculate_sucra(nma, small_values = "good")
+plot(sucra, type = "both")  # Shows SUCRA scores and rank-o-gram
+
+# 2. Inconsistency Assessment
+node_split <- node_splitting(nma, data)
+design_inc <- design_inconsistency(nma, data)
+loops <- loop_inconsistency(nma, data)
+
+# 3. Heterogeneity Analysis
+het <- heterogeneity_report(nma)
+print(het)
+
+# Prediction intervals for individual comparisons
+pi <- prediction_interval(nma, treatment = "DrugA", reference = "Placebo")
+print(pi)
+
+# 4. League Table
+league <- create_league_table(nma, sucra, format = "effect_ci")
+write_league_table(league, "league_table.csv")
+
+# 5. Publication Bias
+pub_bias <- assess_publication_bias(nma, data, method = "both")
+print(pub_bias)
+contour_funnel_plot(nma)  # Contour-enhanced funnel plot
+
+# 6. Visualization Suite
+plot_network(data, nma, layout = "spring")
+forest_plot(nma, sort_by = "sucra", sucra_result = sucra)
+comparison_adjusted_funnel(nma)
+interval_plot(nma, show_prediction = TRUE)
+
+# 7. Effect Size Conversions
+# Convert OR to RR
+OR <- 2.0
+RR <- or_to_rr(OR, baseline_risk = 0.20)
+
+# Calculate NNT
+nnt <- calculate_nnt(OR, type = "OR", baseline_risk = 0.20)
+print(nnt)
+
+# Batch conversions
+ORs <- c(1.5, 2.0, 2.5, 3.0)
+RRs <- batch_convert(ORs, or_to_rr, p0 = 0.20)
 ```
 
 ## Development
