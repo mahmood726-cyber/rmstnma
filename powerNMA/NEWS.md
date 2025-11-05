@@ -74,6 +74,7 @@
 * **Performance Benchmarking** - Weekly performance monitoring
 * **Automated Releases** - Tag-based release automation
 * **Dependency Updates** - Dependabot integration
+* **Status**: CI/CD workflows activated and running on GitHub Actions
 
 ### Core NMA Features (Phases 1-11)
 * Standard network meta-analysis (frequentist & Bayesian)
