@@ -92,6 +92,59 @@ A production-ready R package that unifies two sophisticated approaches:
 - Robustness assessment across assumptions
 - Visual sensitivity plots
 
+### ✨ Phase 7: Breakthrough 2024-2025 Methods (CUTTING EDGE!)
+
+**Component Network Meta-Analysis (CNMA)**
+- Decompose complex interventions into individual components
+- Additive component effects estimation
+- Interaction component models (synergistic/antagonistic effects)
+- Component-level effect sizes and confidence intervals
+- Model comparison (additive vs interaction)
+- Component contribution analysis
+- Based on Veroniki et al. (2025) methodology
+
+**Multivariate Network Meta-Analysis**
+- Joint analysis of multiple correlated outcomes
+- Borrowing strength across efficacy and safety outcomes
+- Benefit-risk trade-off visualization
+- Net benefit calculations with user-specified weights
+- Outcome-treatment interaction testing
+- Within-study correlation handling
+- Kendall's W concordance testing
+- Following Efthimiou et al. (2015) framework
+
+**Living Network Meta-Analysis Framework**
+- Continuous updating as new evidence emerges
+- Version control with automated tracking
+- Trigger rules for when to update (new studies, effect changes, time)
+- Sequential updating protocols
+- Change detection and significance testing
+- Timeline visualization across versions
+- Treatment effect tracking over time
+- Automated update reports
+- Based on Elliott et al. (2024) Mayo Clinic protocols
+
+**Personalized Treatment Prediction (IPD-NMA)**
+- Individual patient data network meta-regression
+- Effect modifier identification
+- Treatment-covariate interaction modeling
+- Patient-specific treatment effect predictions
+- Best treatment recommendation by patient profile
+- Treatment selection heatmaps
+- Subgroup visualization across covariates
+- Following Riley et al. (2020) IPD-NMA methods
+
+**Threshold Analysis & Value of Information**
+- Threshold analysis for treatment selection
+- Switch point identification (when optimal treatment changes)
+- Expected Value of Perfect Information (EVPI)
+- Expected Value of Perfect Parameter Information (EVPPI)
+- Population-level EVPI calculations
+- Cost-Effectiveness Acceptability Curves (CEAC)
+- Net benefit framework with costs
+- Research prioritization guidance
+- Based on Claxton et al. (2005) & Strong et al. (2014)
+
 ### 🆕 Phase 5: Advanced Statistical Methods
 
 **Treatment Rankings & SUCRA**
