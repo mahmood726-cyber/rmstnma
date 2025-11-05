@@ -55,6 +55,43 @@ setup_powernma <- function(
   config
 }
 
+#' Generate Pairwise Comparisons for Multi-arm Trials
+#'
+#' Helper function to generate all pairwise comparisons in a trial.
+#' For trials including the reference treatment, generates reference-based
+#' comparisons (all vs reference). Otherwise, generates all pairwise combinations.
+#'
+#' @param treatments Vector of treatment names in the trial
+#' @param reference Reference treatment name (optional)
+#' @return List of pairwise comparisons (each a 2-element vector)
+#' @keywords internal
+#' @examples
+#' \dontrun{
+#' # Reference-based comparisons
+#' generate_pairwise_comparisons(c("A", "B", "C"), reference = "A")
+#' # Returns: list(c("A", "B"), c("A", "C"))
+#'
+#' # All pairwise comparisons (no reference)
+#' generate_pairwise_comparisons(c("A", "B", "C"))
+#' # Returns: list(c("A", "B"), c("A", "C"), c("B", "C"))
+#' }
+generate_pairwise_comparisons <- function(treatments, reference = NULL) {
+  if (length(treatments) < 2) {
+    return(list())
+  }
+
+  if (!is.null(reference) && reference %in% treatments) {
+    # Reference-based comparisons: all treatments vs reference
+    other_treatments <- setdiff(treatments, reference)
+    comparisons <- lapply(other_treatments, function(t) c(reference, t))
+  } else {
+    # No reference or reference not in trial: all pairwise combinations
+    comparisons <- utils::combn(treatments, 2, simplify = FALSE)
+  }
+
+  comparisons
+}
+
 #' Run Core Network Meta-Analysis
 #'
 #' Perform standard frequentist network meta-analysis
@@ -143,16 +180,10 @@ rmst_nma <- function(ipd, tau_list = c(90, 180, 365), reference = "Control") {
 
       if (length(treatments) < 2) next
 
-      # FIXED: Create ALL pairwise comparisons for multi-arm trials
+      # FIXED: Create ALL pairwise comparisons for multi-arm trials using helper function
       # This properly handles k-arm trials with k(k-1)/2 comparisons
-      if (reference %in% treatments) {
-        # Reference-based comparisons: all treatments vs reference
-        other_treatments <- setdiff(treatments, reference)
-        comparisons <- lapply(other_treatments, function(t) c(reference, t))
-      } else {
-        # No reference in trial: all pairwise combinations
-        comparisons <- utils::combn(treatments, 2, simplify = FALSE)
-      }
+      comparisons <- generate_pairwise_comparisons(treatments, reference)
+      if (length(comparisons) == 0) next
 
       # Process each comparison
       for (comp in comparisons) {
@@ -250,15 +281,9 @@ milestone_nma <- function(ipd, times = c(90, 180, 365), reference = "Control",
 
       if (length(treatments) < 2) next
 
-      # FIXED: Create ALL pairwise comparisons for multi-arm trials
-      if (reference %in% treatments) {
-        # Reference-based comparisons: all treatments vs reference
-        other_treatments <- setdiff(treatments, reference)
-        comparisons <- lapply(other_treatments, function(t) c(reference, t))
-      } else {
-        # No reference in trial: all pairwise combinations
-        comparisons <- utils::combn(treatments, 2, simplify = FALSE)
-      }
+      # FIXED: Create ALL pairwise comparisons for multi-arm trials using helper function
+      comparisons <- generate_pairwise_comparisons(treatments, reference)
+      if (length(comparisons) == 0) next
 
       # Process each comparison
       for (comp in comparisons) {
