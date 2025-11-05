@@ -118,6 +118,19 @@ install.packages(c(
 ))
 ```
 
+###  For Enterprise bs4Dash Dashboard
+
+```r
+install.packages(c(
+  "bs4Dash",              # Bootstrap 4 dashboard framework
+  "shinyWidgets",         # Enhanced UI widgets
+  "waiter",               # Loading screens and progress bars
+  "fresh",                # Custom themes
+  "htmlwidgets",          # Interactive HTML widgets
+  "webshot2"              # High-resolution static exports from HTML
+))
+```
+
 ## Quick Start
 
 ### Example 1: Standard Network Meta-Analysis
@@ -213,6 +226,8 @@ results <- run_powernma(
 
 ##  Interactive Dashboard
 
+### Standard Dashboard (shinydashboard)
+
 Launch the Shiny dashboard for interactive exploration:
 
 ```r
@@ -227,6 +242,45 @@ results <- run_powernma(ipd, data_type = "ipd",
                         config = setup_powernma(use_timevarying = TRUE))
 launch_powernma_app(results)
 ```
+
+### Enterprise bs4Dash Dashboard (NEW!)
+
+**Modern, professional Bootstrap 4 interface with high-resolution export capabilities:**
+
+```r
+# Launch enterprise dashboard with high-resolution exports
+launch_bs4dash_app(
+  theme = "default",        # "default", "dark", or "light"
+  high_res_dpi = 600,       # Up to 1200 DPI for publication-quality
+  max_upload_mb = 100
+)
+
+# Dark theme with maximum resolution
+launch_bs4dash_app(
+  theme = "dark",
+  high_res_dpi = 1200       # Maximum resolution for publications
+)
+```
+
+**Key Features:**
+- Modern Bootstrap 4 UI with responsive design
+- High-resolution plot downloads (300-1200 DPI)
+- Multiple export formats: PNG, PDF, SVG, TIFF, HTML
+- Publication-quality outputs suitable for journals
+- Integrated Phase 12-14 advanced methods
+- Real-time progress tracking with waiter animations
+- Customizable export dimensions and resolution
+- Batch export functionality
+
+**High-Resolution Downloads:**
+Every visualization includes download buttons for:
+- PNG at 300, 600, and 1200 DPI
+- PDF (vector graphics)
+- SVG (vector graphics)
+- TIFF (lossless compression)
+- HTML (interactive)
+
+Configure export settings globally via the control bar (gear icon in top-right) or per-plot using the download buttons.
 
 ##  Data Format
 
