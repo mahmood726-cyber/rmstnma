@@ -141,7 +141,27 @@ powerNMA/
 
 ## Examples
 
-### Example 1: Comprehensive Analysis
+### Example 1: Quick Start - Basic NMA
+
+```r
+library(powerNMA)
+
+# Generate simulated data
+data <- simulate_nma_data(n_studies = 20)
+
+# Run standard NMA with minimal configuration
+results <- run_powernma(
+  data = data,
+  data_type = "pairwise",
+  mode = "standard"
+)
+
+# View results
+print(results)
+summary(results)
+```
+
+### Example 2: Comprehensive Analysis
 
 ```r
 library(powerNMA)
@@ -185,23 +205,57 @@ results$results$loo           # Sensitivity analysis
 results$summary$top5_pscore   # Top treatments
 ```
 
-### Example 2: Time-Varying Analysis
+### Example 3: Using Your Own Data
+
+```r
+library(powerNMA)
+
+# Load your data (must have columns: studlab, treat1, treat2, TE, seTE)
+my_data <- read.csv("my_nma_data.csv")
+
+# Validate data format
+validate_nma_input(my_data)
+
+# Run analysis
+config <- setup_powernma(
+  sm = "OR",              # Odds Ratio
+  use_bayesian = FALSE,    # Frequentist only
+  run_sensitivity = TRUE,
+  export_results = TRUE,
+  output_dir = "my_results"
+)
+
+results <- run_powernma(
+  data = my_data,
+  data_type = "pairwise",
+  ref_treatment = "Placebo",  # Specify your reference
+  config = config
+)
+
+print(results)
+```
+
+### Example 4: Time-Varying Analysis (EXPERIMENTAL)
 
 ```r
 # Generate IPD
 ipd <- generate_example_ipd(n_trials = 10, n_per_arm = 100)
 
+# Validate IPD format
+validate_ipd(ipd)
+
 # Configure for time-varying
 config <- setup_powernma(
   use_timevarying = TRUE,
-  tau_list = c(90, 180, 365),
-  milestone_times = c(90, 180, 365)
+  tau_list = c(90, 180, 365),       # RMST time horizons
+  milestone_times = c(90, 180, 365)  # Milestone time points
 )
 
-# Run analysis
+# Run analysis (NOTE: mode = "experimental")
 results <- run_powernma(
   data = ipd,
   data_type = "ipd",
+  mode = "experimental",  # Required for time-varying methods
   config = config
 )
 
@@ -210,6 +264,32 @@ print(results$results$rmst_nma)
 
 # Milestone results
 print(results$results$milestone_nma)
+```
+
+### Example 5: IPD with Null Seed (Different Each Time)
+
+```r
+# Generate different datasets without fixed seed
+ipd1 <- generate_example_ipd(n_trials = 5, n_per_arm = 50, seed = NULL)
+ipd2 <- generate_example_ipd(n_trials = 5, n_per_arm = 50, seed = NULL)
+
+# Results will differ (useful for sensitivity analysis)
+```
+
+### Example 6: Handling Missing Data and Edge Cases
+
+```r
+library(powerNMA)
+
+# Your data might have issues - validate first!
+tryCatch({
+  validate_nma_input(my_problematic_data)
+}, error = function(e) {
+  cat("Validation error:", e$message, "\n")
+  # Error message will tell you exactly what's wrong
+})
+
+# Fix the data based on the error message, then proceed
 ```
 
 ## Development

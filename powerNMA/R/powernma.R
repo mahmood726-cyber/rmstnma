@@ -157,8 +157,10 @@ run_bayesian_nma_simple <- function(data, ref_treatment, sm) {
   net <- gemtc::mtc.network(data.re = net_data)
   model <- gemtc::mtc.model(net, type = "consistency",
                             likelihood = "normal", link = "identity")
-  results <- gemtc::mtc.run(model, n.adapt = 5000, n.iter = 10000,
-                           n.chains = 3)
+  results <- gemtc::mtc.run(model,
+                           n.adapt = .DEFAULT_N_ADAPT,
+                           n.iter = .DEFAULT_N_ITER,
+                           n.chains = .DEFAULT_N_CHAINS)
 
   list(network = net, model = model, results = results)
 }
@@ -168,8 +170,8 @@ run_bayesian_nma_simple <- function(data, ref_treatment, sm) {
 loo_sensitivity_simple <- function(data, ref_treatment, sm) {
   studs <- unique(data$studlab)
 
-  if (length(studs) < 5) {
-    msg("Too few studies for LOO")
+  if (length(studs) < .MIN_STUDIES_FOR_LOO) {
+    msg("Too few studies for LOO (need at least %d)", .MIN_STUDIES_FOR_LOO)
     return(NULL)
   }
 

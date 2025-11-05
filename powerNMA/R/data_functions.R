@@ -24,8 +24,7 @@ generate_example_ipd <- function(n_trials = 5, n_per_arm = 100, seed = 42) {
   }
 
   treatments <- c("Control", "DrugA", "DrugB", "DrugC", "DrugD")
-  true_eff <- c(Control = 0, DrugA = log(0.85), DrugB = log(0.75),
-                DrugC = log(0.90), DrugD = log(0.78))
+  event_rates <- get_event_rates()
 
   designs <- list(
     c("Control", "DrugA"), c("Control", "DrugB"), c("Control", "DrugC"),
@@ -39,17 +38,11 @@ generate_example_ipd <- function(n_trials = 5, n_per_arm = 100, seed = 42) {
     design <- designs[[(i - 1) %% length(designs) + 1]]
 
     for (trt in design) {
-      rate <- switch(trt,
-        "Control" = 0.003,
-        "DrugA" = 0.002,
-        "DrugB" = 0.0015,
-        "DrugC" = 0.0025,
-        "DrugD" = 0.0018,
-        0.003
-      )
+      rate <- event_rates[trt]
+      if (is.na(rate)) rate <- .EVENT_RATE_CONTROL  # Fallback for unknown treatments
 
       event_times <- stats::rexp(n_per_arm, rate)
-      censor_times <- stats::runif(n_per_arm, 0, 500)
+      censor_times <- stats::runif(n_per_arm, 0, .DEFAULT_CENSOR_MAX)
 
       obs_times <- pmin(event_times, censor_times)
       obs_status <- as.integer(event_times <= censor_times)
@@ -93,8 +86,7 @@ simulate_nma_data <- function(n_studies = 40, seed = 42) {
   }
 
   treatments <- c("Placebo", "DrugA", "DrugB", "DrugC", "DrugD")
-  true_eff <- c(Placebo = 0, DrugA = log(0.85), DrugB = log(0.75),
-                DrugC = log(0.90), DrugD = log(0.78))
+  true_eff <- get_true_effects()
 
   designs <- list(
     c("Placebo", "DrugA"), c("Placebo", "DrugB"), c("Placebo", "DrugC"),
@@ -113,8 +105,8 @@ simulate_nma_data <- function(n_studies = 40, seed = 42) {
       t1 <- p[1]
       t2 <- p[2]
       true_diff <- true_eff[t1] - true_eff[t2]
-      study_re <- stats::rnorm(1, 0, 0.10)
-      se <- stats::runif(1, 0.08, 0.25)
+      study_re <- stats::rnorm(1, 0, .DEFAULT_STUDY_RE_SD)
+      se <- stats::runif(1, .DEFAULT_SE_MIN, .DEFAULT_SE_MAX)
       TE <- stats::rnorm(1, true_diff + study_re, se)
 
       tibble::tibble(
@@ -131,18 +123,17 @@ simulate_nma_data <- function(n_studies = 40, seed = 42) {
   info <- pw %>%
     dplyr::distinct(studlab) %>%
     dplyr::mutate(
-      year = sample(2010:2025, dplyr::n(), replace = TRUE),
-      is_rct = stats::rbinom(dplyr::n(), 1, 0.8),
+      year = sample(.STUDY_YEAR_MIN:.STUDY_YEAR_MAX, dplyr::n(), replace = TRUE),
+      is_rct = stats::rbinom(dplyr::n(), 1, .DEFAULT_RCT_PROB),
       study_design = factor(ifelse(is_rct == 1, "RCT", "Non-RCT")),
       grade = factor(
-        sample(c("High", "Moderate", "Low", "Very low"),
-               dplyr::n(), replace = TRUE, prob = c(0.4, 0.4, 0.15, 0.05)),
-        levels = c("High", "Moderate", "Low", "Very low")
+        sample(names(.GRADE_PROBS), dplyr::n(), replace = TRUE, prob = .GRADE_PROBS),
+        levels = names(.GRADE_PROBS)
       ),
-      age_mean = round(stats::rnorm(dplyr::n(), 65, 5), 1),
-      female_pct = pmin(0.8, pmax(0.2, stats::rnorm(dplyr::n(), 0.45, 0.10))),
-      bmi_mean = round(stats::rnorm(dplyr::n(), 28, 2), 1),
-      charlson = round(pmax(0, stats::rnorm(dplyr::n(), 1.5, 0.5)), 1)
+      age_mean = round(stats::rnorm(dplyr::n(), .DEFAULT_AGE_MEAN, .DEFAULT_AGE_SD), 1),
+      female_pct = pmin(0.8, pmax(0.2, stats::rnorm(dplyr::n(), .DEFAULT_FEMALE_PCT, .DEFAULT_FEMALE_SD))),
+      bmi_mean = round(stats::rnorm(dplyr::n(), .DEFAULT_BMI_MEAN, .DEFAULT_BMI_SD), 1),
+      charlson = round(pmax(0, stats::rnorm(dplyr::n(), .DEFAULT_CHARLSON_MEAN, .DEFAULT_CHARLSON_SD)), 1)
     )
 
   dplyr::left_join(pw, info, by = "studlab")
