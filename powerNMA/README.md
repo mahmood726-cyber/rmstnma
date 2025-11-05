@@ -1,0 +1,343 @@
+# powerNMA: Comprehensive Network Meta-Analysis Suite
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![R](https://img.shields.io/badge/R-%E2%89%A54.0.0-blue.svg)](https://www.r-project.org/)
+
+> A powerful, unified R package combining time-varying NMA methods with advanced meta-analysis techniques
+
+##  Features
+
+### Core Capabilities
+
+- **Standard Network Meta-Analysis** - Frequentist and Bayesian approaches using `netmeta` and `gemtc`
+- **Time-Varying Methods** - RMST and milestone survival analyses for time-to-event data
+- **Transportability** - Advanced weighting schemes for target population inference
+- **Publication Bias** - PET-PEESE, selection models, trim-and-fill
+- **Meta-Regression** - With spline smoothing and cluster-robust inference
+- **Sensitivity Analyses** - Leave-one-out, leave-one-treatment-out, multiverse analysis
+- **ML Heterogeneity** - Machine learning exploration of effect modifiers
+- **Interactive Dashboard** - Comprehensive Shiny interface
+
+### Methodological Innovations
+
+1. **Transportability Weighting**
+   - Mahalanobis and Euclidean distance metrics
+   - Gaussian and tricube kernels
+   - GRADE-informed and design-adjusted weighting
+
+2. **Time-Varying Effects**
+   - Restricted Mean Survival Time (RMST) NMA
+   - Milestone survival analysis with continuity correction
+   - Trajectory visualization
+
+3. **Comprehensive Diagnostics**
+   - Global and local inconsistency testing
+   - Effective sample size calculations
+   - Network geometry metrics
+   - Convergence diagnostics for Bayesian models
+
+## Installation
+
+```r
+# Install from GitHub
+# install.packages("devtools")
+devtools::install_github("your-org/powerNMA")
+
+# Or install with all optional dependencies
+devtools::install_github("your-org/powerNMA", dependencies = TRUE)
+```
+
+###  Required Packages
+
+```r
+install.packages(c(
+  "netmeta", "survRM2", "survival",
+  "ggplot2", "dplyr", "tidyr", "purrr", "tibble",
+  "shiny", "DT", "plotly", "readr"
+))
+```
+
+###  Optional (for full features)
+
+```r
+install.packages(c(
+  "gemtc", "coda",        # Bayesian NMA
+  "multinma",             # Advanced Bayesian methods
+  "metafor",              # Meta-regression
+  "clubSandwich",         # Robust inference
+  "ranger",               # ML heterogeneity
+  "weightr", "metasens",  # Publication bias
+  "rmarkdown", "knitr"    # Reports
+))
+```
+
+## Quick Start
+
+### Example 1: Standard Network Meta-Analysis
+
+```r
+library(powerNMA)
+
+# Generate example data
+data <- simulate_nma_data(n_studies = 40)
+
+# Run comprehensive analysis
+results <- run_powernma(
+  data = data,
+  data_type = "pairwise",
+  config = setup_powernma(
+    sm = "HR",
+    use_bayesian = TRUE,
+    export_results = TRUE
+  )
+)
+
+# View results
+print(results)
+summary(results)
+
+# Access components
+results$results$main_nma        # Main NMA
+results$results$ranking         # Treatment ranking
+results$results$loo             # Leave-one-out
+```
+
+### Example 2: Time-Varying Analysis with IPD
+
+```r
+# Generate IPD
+ipd <- generate_example_ipd(n_trials = 10, n_per_arm = 100)
+
+# Configure for time-varying analysis
+config <- setup_powernma(
+  use_timevarying = TRUE,
+  tau_list = c(90, 180, 365),
+  milestone_times = c(90, 180, 365),
+  export_plots = TRUE
+)
+
+# Run analysis
+results <- run_powernma(
+  data = ipd,
+  data_type = "ipd",
+  config = config
+)
+
+# RMST results
+print(results$results$rmst_nma)
+
+# Milestone results
+print(results$results$milestone_nma)
+```
+
+### Example 3: Advanced Analysis with Transportability
+
+```r
+# Your trial data
+data <- simulate_nma_data(n_studies = 50)
+
+# Define target population
+target_pop <- list(
+  age_mean = 70,
+  female_pct = 0.50,
+  bmi_mean = 29,
+  charlson = 2.0
+)
+
+# Comprehensive configuration
+config <- setup_powernma(
+  sm = "HR",
+  use_transport = TRUE,
+  use_bayesian = TRUE,
+  run_sensitivity = TRUE,
+  run_metareg = TRUE,
+  export_results = TRUE,
+  export_plots = TRUE
+)
+
+# Run full analysis
+results <- run_powernma(
+  data = data,
+  data_type = "pairwise",
+  target_population = target_pop,
+  config = config
+)
+```
+
+##  Interactive Dashboard
+
+Launch the Shiny dashboard for interactive exploration:
+
+```r
+# Standard NMA
+data <- simulate_nma_data()
+results <- run_powernma(data, data_type = "pairwise")
+launch_powernma_app(results)
+
+# IPD with time-varying methods
+ipd <- generate_example_ipd()
+results <- run_powernma(ipd, data_type = "ipd",
+                        config = setup_powernma(use_timevarying = TRUE))
+launch_powernma_app(results)
+```
+
+##  Data Format
+
+### Pairwise Data (Standard NMA)
+
+```r
+# Required columns:
+data.frame(
+  studlab = c("Study_01", "Study_01", "Study_02"),
+  treat1 = c("Control", "Control", "DrugA"),
+  treat2 = c("DrugA", "DrugB", "DrugB"),
+  TE = c(-0.15, -0.25, -0.10),      # Treatment effect
+  seTE = c(0.10, 0.12, 0.09)        # Standard error
+)
+
+# Optional covariates for meta-regression:
+# age_mean, female_pct, bmi_mean, charlson, is_rct, grade, etc.
+```
+
+### Individual Patient Data (IPD)
+
+```r
+# Required columns:
+data.frame(
+  trial = c("Trial_01", "Trial_01", "Trial_01"),
+  treatment = c("Control", "Control", "DrugA"),
+  time = c(150, 200, 180),          # Follow-up time
+  status = c(1, 0, 1)               # Event indicator (1=event, 0=censored)
+)
+```
+
+##  Configuration Options
+
+```r
+config <- setup_powernma(
+  # Effect measure
+  sm = "HR",                       # "HR", "OR", "RR", "MD", "SMD"
+
+  # Methods
+  use_bayesian = TRUE,             # Run Bayesian NMA
+  use_timevarying = TRUE,          # Run RMST/milestone (requires IPD)
+  run_sensitivity = TRUE,          # LOO, LOTO analyses
+  run_metareg = TRUE,              # Meta-regression
+
+  # Time-varying settings
+  tau_list = c(90, 180, 365),      # RMST time horizons
+  milestone_times = c(90, 180, 365),  # Milestone time points
+
+  # Transportability
+  use_transport = TRUE,            # Enable transportability weighting
+
+  # Export
+  export_results = TRUE,
+  export_plots = TRUE,
+  output_dir = "results",
+  plot_dir = "plots",
+
+  # Reproducibility
+  seed = 42
+)
+```
+
+##  Output Structure
+
+```r
+results <- run_powernma(...)
+
+# Main components:
+results$results$main_nma          # netmeta object
+results$results$rmst_nma          # RMST analyses (if IPD)
+results$results$milestone_nma     # Milestone analyses (if IPD)
+results$results$bayesian          # Bayesian results
+results$results$ranking           # Treatment ranking
+results$results$loo               # Leave-one-out sensitivity
+results$results$geometry          # Network metrics
+results$results$global_inconsistency  # Design-by-treatment test
+results$results$local_inconsistency   # Node-splitting
+
+results$summary                   # Summary statistics
+results$config                    # Configuration used
+results$ref_treatment             # Reference treatment
+```
+
+##  Development Tools
+
+```r
+# Validate data
+validate_ipd(ipd_data)
+validate_nma_input(pairwise_data)
+
+# Clean data
+clean_data <- clean_nma_data(raw_data)
+
+# Network geometry
+geometry <- network_geometry(data)
+
+# Clear cache
+clear_powernma_cache()
+```
+
+##  Visualization
+
+```r
+# Coming soon: comprehensive plotting functions
+# plot(results, type = "forest")
+# plot(results, type = "network")
+# plot(results, type = "sucra")
+# plot(results, type = "trajectory")  # For time-varying
+```
+
+##  Examples
+
+See `vignettes/` for detailed examples:
+- `introduction.Rmd` - Getting started
+- `time_varying.Rmd` - RMST and milestone analysis
+- `advanced.Rmd` - Transportability and meta-regression
+- `bayesian.Rmd` - Bayesian methods
+
+##  Citation
+
+If you use powerNMA in your research, please cite:
+
+```
+@misc{powernma2025,
+  title = {powerNMA: Comprehensive Network Meta-Analysis Suite},
+  author = {NMA Research Group},
+  year = {2025},
+  url = {https://github.com/your-org/powerNMA}
+}
+```
+
+##  Contributing
+
+Contributions are welcome! Please see `CONTRIBUTING.md` for guidelines.
+
+##  License
+
+MIT License - see `LICENSE` file
+
+##  References
+
+### Time-Varying Methods
+- Guyot P, et al. (2012). Enhanced secondary analysis of survival data. *BMC Med Res Methodol* 12:9
+- Wei Y, Royston P (2017). Reconstructing time-to-event data from published KM curves. *Stata J* 17(4):786-802
+
+### Network Meta-Analysis
+- Rücker G, Schwarzer G (2015). Ranking treatments in frequentist network meta-analysis works without resampling methods. *BMC Med Res Methodol* 15:58
+- Dias S, et al. (2013). Evidence synthesis for decision making 4: inconsistency in networks of evidence based on randomized controlled trials. *Med Decis Making* 33:641-656
+
+### Transportability
+- Dahabreh IJ, et al. (2020). Extending inferences from a randomized trial to a target population. *Eur J Epidemiol* 35:719-722
+
+##  Support
+
+- **Issues**: https://github.com/your-org/powerNMA/issues
+- **Discussions**: https://github.com/your-org/powerNMA/discussions
+- **Email**: research@example.com
+
+---
+
+**Built with** | `netmeta` • `survRM2` • `gemtc` • `shiny` • `ggplot2` • `tidyverse`
