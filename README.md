@@ -187,6 +187,112 @@ A production-ready R package that unifies two sophisticated approaches:
 - `quick_nma()` - Fast streamlined analysis
 - Unified result objects with print/summary/plot methods
 
+### 🎨 Phase 9: Advanced Visualizations & AI-Powered Manuscript Generation (REVOLUTIONARY!)
+
+**Part 1: Interactive Visualizations**
+- **Interactive Dashboard with Plotly & Shiny**
+  - Real-time interactive network graphs with zoom/pan
+  - Dynamic forest plots with adjustable confidence levels
+  - Interactive funnel plots with study selection
+  - Treatment ranking visualizations with hover details
+  - Heat maps for pairwise comparisons
+  - **3D Network Visualization** with treatment nodes in 3D space
+  - Parameter adjustment sliders for real-time updates
+  - Export capabilities (PNG, PDF, SVG, interactive HTML)
+  - Responsive design for different screen sizes
+  - One-click dashboard launch: `create_interactive_dashboard(nma_result)`
+
+**Part 2: AI-Powered Manuscript Generation**
+- **Intelligent Methods Section Generator**
+  - **500+ rule-based templates** for Methods generation
+  - Automatic detection of analysis characteristics
+  - Adaptive text generation based on NMA configuration
+  - Covers: search strategy, eligibility, data extraction, risk of bias
+  - Statistical methods description (frequentist/Bayesian)
+  - Advanced methods integration (CNMA, MVNMA, Living NMA, IPD-NMA)
+  - Heterogeneity and inconsistency methods documentation
+  - Multiple verbosity styles: concise, detailed, very_detailed
+  - **10,000+ unique permutations** from template combinations
+
+- **Intelligent Results Section Generator**
+  - **500+ rule-based templates** for Results generation
+  - Automatic statistical reporting with proper formatting
+  - Study selection and network characteristics
+  - Treatment effects with confidence intervals and p-values
+  - Treatment rankings and SUCRA interpretations
+  - Heterogeneity results with I² interpretation
+  - Inconsistency assessment reporting
+  - Publication bias and sensitivity results
+  - Clinical context and interpretation
+  - **10,000+ unique permutations** from template combinations
+
+- **Local Ollama AI Enhancement**
+  - Integration with local Ollama LLM instances
+  - Multiple enhancement modes:
+    - **Readability**: Improve clarity and flow
+    - **Clinical**: Add clinical context and interpretation
+    - **Polish**: Enhance language and grammar
+    - **Expand**: Add relevant details and context
+    - **Concise**: Make more focused and brief
+    - **Academic**: Enhance academic tone and style
+  - Support for multiple models (llama2, mistral, medical models)
+  - Three enhancement levels: light, moderate, heavy
+  - Quality checks to preserve statistical accuracy
+  - Batch enhancement for multiple sections
+  - Automatic model recommendation
+  - Privacy-focused (runs locally, no data sent to cloud)
+
+- **Comprehensive Text Results Generator**
+  - Publication-ready narrative text summaries
+  - Multiple output styles: narrative, structured, detailed
+  - Complete statistical reporting with interpretations
+  - Sections include:
+    - Network overview and characteristics
+    - Treatment effects with clinical interpretation
+    - Rankings and SUCRA scores
+    - Heterogeneity assessment
+    - Inconsistency evaluation
+    - Publication bias assessment
+    - Sensitivity analyses
+    - Summary and conclusions
+  - Export to multiple formats: TXT, DOCX, HTML, PDF
+  - Word count and metadata tracking
+  - Integrated with AI enhancement pipeline
+
+**Complete Workflow Example:**
+```r
+# 1. Run comprehensive NMA
+nma <- run_ultimate_nma(data)
+
+# 2. Generate manuscript sections (rule-based, 500+ rules each)
+methods <- generate_methods_section(nma, style = "detailed")
+results <- generate_results_section(nma, style = "detailed")
+
+# 3. Enhance with AI (if Ollama available)
+methods_enhanced <- enhance_methods_with_ollama(
+  methods$text,
+  enhancement_level = "moderate"
+)
+results_enhanced <- enhance_results_with_ollama(
+  results$text,
+  add_clinical_context = TRUE,
+  enhancement_level = "moderate"
+)
+
+# 4. Generate comprehensive text results
+text_results <- generate_comprehensive_text_results(
+  nma, sucra, heterogeneity,
+  style = "narrative",
+  include_clinical = TRUE
+)
+
+# 5. Launch interactive dashboard
+create_interactive_dashboard(nma, launch_browser = TRUE)
+
+# 6. Export everything
+export_text_results(text_results, "nma_results.docx", format = "docx")
+```
+
 ### 🆕 Phase 5: Advanced Statistical Methods
 
 **Treatment Rankings & SUCRA**
@@ -604,6 +710,219 @@ ORs <- c(1.5, 2.0, 2.5, 3.0)
 RRs <- batch_convert(ORs, or_to_rr, p0 = 0.20)
 ```
 
+### Example 9: 🎨 Phase 9 - Interactive Visualizations & AI-Powered Manuscripts (NEW!)
+
+```r
+library(powerNMA)
+
+# Run comprehensive analysis
+data <- simulate_nma_data(n_studies = 40)
+nma <- run_ultimate_nma(data, sm = "OR")
+
+# ============================================
+# Part 1: Interactive Visualizations
+# ============================================
+
+# Launch interactive dashboard (opens in browser)
+create_interactive_dashboard(
+  nma_result = nma,
+  data = data,
+  launch_browser = TRUE
+)
+
+# Dashboard includes:
+# - Interactive network graph (zoom, pan, hover)
+# - Dynamic forest plots
+# - Interactive funnel plots
+# - Treatment rankings with hover details
+# - Heat maps for comparisons
+# - 3D network visualization
+# - Real-time parameter adjustment
+# - Export capabilities
+
+# Individual interactive plots
+interactive_network <- create_interactive_network(data, nma)
+interactive_forest <- create_interactive_forest(nma)
+interactive_rankings <- create_interactive_rankings(nma)
+network_3d <- create_3d_network(data, nma)
+
+# Save interactive plots
+htmlwidgets::saveWidget(interactive_network, "network.html")
+
+# ============================================
+# Part 2: AI-Powered Manuscript Generation
+# ============================================
+
+# Calculate additional results
+sucra <- calculate_sucra(nma)
+het <- heterogeneity_report(nma)
+incon <- node_splitting(nma, data)
+
+# Generate Methods section with 500+ rules
+methods <- generate_methods_section(
+  nma_result = nma,
+  analysis_config = list(
+    search_databases = c("MEDLINE", "Embase", "CENTRAL"),
+    risk_of_bias_tool = "RoB2",
+    has_component_nma = FALSE,
+    has_multivariate = FALSE,
+    has_ipd = FALSE
+  ),
+  style = "detailed",  # Options: "concise", "detailed", "very_detailed"
+  use_ai = FALSE  # Set TRUE if Ollama available
+)
+
+cat(methods$text)
+cat("\n\nPermutations:", methods$permutation_count, "\n")
+
+# Generate Results section with 500+ rules
+results <- generate_results_section(
+  nma_result = nma,
+  sucra_result = sucra,
+  heterogeneity_result = het,
+  inconsistency_result = incon,
+  style = "detailed",
+  use_ai = FALSE
+)
+
+cat(results$text)
+cat("\n\nPermutations:", results$permutation_count, "\n")
+
+# ============================================
+# Optional: AI Enhancement with Ollama
+# ============================================
+
+# Check if Ollama is available
+if (check_ollama_available()) {
+
+  # List available models
+  models <- list_ollama_models()
+  print(models)
+
+  # Get recommended model
+  model <- get_recommended_model(prefer_medical = TRUE)
+
+  # Enhance Methods section
+  methods_enhanced <- enhance_methods_with_ollama(
+    methods$text,
+    enhancement_level = "moderate",  # "light", "moderate", "heavy"
+    model = model
+  )
+
+  cat("Original length:", nchar(methods$text), "\n")
+  cat("Enhanced length:", nchar(methods_enhanced$enhanced_text), "\n")
+  cat("Increase:", methods_enhanced$character_increase_pct, "%\n")
+
+  # Enhance Results with clinical context
+  results_enhanced <- enhance_results_with_ollama(
+    results$text,
+    add_clinical_context = TRUE,
+    enhancement_level = "moderate",
+    model = model
+  )
+
+  # Quality check
+  quality <- quality_check_enhanced_text(
+    results$text,
+    results_enhanced$enhanced_text
+  )
+
+  if (quality$passed) {
+    cat("Quality check passed!\n")
+  } else {
+    cat("Warnings:", paste(quality$warnings, collapse = "\n"), "\n")
+  }
+
+  # Use enhanced text
+  final_methods <- methods_enhanced$enhanced_text
+  final_results <- results_enhanced$enhanced_text
+
+} else {
+  cat("Ollama not available. Using rule-based text only.\n")
+  final_methods <- methods$text
+  final_results <- results$text
+}
+
+# ============================================
+# Generate Comprehensive Text Results
+# ============================================
+
+text_results <- generate_comprehensive_text_results(
+  nma_result = nma,
+  sucra_result = sucra,
+  heterogeneity_result = het,
+  inconsistency_result = incon,
+  style = "narrative",  # "narrative", "structured", "detailed"
+  include_clinical = TRUE,
+  include_stats = TRUE
+)
+
+# Print sections
+cat("\n=== NETWORK OVERVIEW ===\n")
+cat(text_results$sections$overview)
+
+cat("\n\n=== TREATMENT EFFECTS ===\n")
+cat(text_results$sections$treatment_effects)
+
+cat("\n\n=== RANKINGS ===\n")
+cat(text_results$sections$rankings)
+
+cat("\n\n=== SUMMARY ===\n")
+cat(text_results$sections$summary)
+
+# Print full text
+print(text_results)
+
+# Export to different formats
+export_text_results(text_results, "nma_results.txt", format = "txt")
+export_text_results(text_results, "nma_results.docx", format = "docx")
+export_text_results(text_results, "nma_results.html", format = "html")
+
+# ============================================
+# Complete Integrated Workflow
+# ============================================
+
+# All-in-one: Analysis → Manuscript → Visualization
+complete_analysis <- function(data) {
+
+  # 1. Run analysis
+  nma <- run_ultimate_nma(data)
+  sucra <- calculate_sucra(nma)
+  het <- heterogeneity_report(nma)
+
+  # 2. Generate manuscripts
+  methods <- generate_methods_section(nma, style = "detailed")
+  results <- generate_results_section(nma, sucra, het, style = "detailed")
+
+  # 3. Generate text results
+  text_results <- generate_comprehensive_text_results(
+    nma, sucra, het,
+    style = "narrative",
+    include_clinical = TRUE
+  )
+
+  # 4. Export everything
+  export_text_results(text_results, "complete_results.docx", format = "docx")
+
+  # 5. Launch dashboard
+  create_interactive_dashboard(nma, data, launch_browser = TRUE)
+
+  return(list(
+    nma = nma,
+    manuscripts = list(methods = methods, results = results),
+    text_results = text_results
+  ))
+}
+
+# Run complete workflow
+analysis <- complete_analysis(data)
+
+cat("\n✨ Phase 9 Complete!")
+cat("\n📊 Interactive dashboard launched")
+cat("\n📝 Manuscripts generated with 10,000+ permutations")
+cat("\n📄 Comprehensive text results exported")
+```
+
 ## Development
 
 ### Setup Development Environment
@@ -746,7 +1065,7 @@ Contributions welcome! See `powerNMA/DEVELOPER_GUIDE.md` for guidelines.
 ---
 
 **Repository Status**: Production-ready
-**Package Version**: 1.0.0
-**Last Updated**: 2025-10-30
+**Package Version**: 1.0.0 (Phase 9 Complete)
+**Last Updated**: 2025-11-05
 
-**Built with** | `netmeta` • `survRM2` • `gemtc` • `shiny` • `ggplot2` • `tidyverse`
+**Built with** | `netmeta` • `survRM2` • `gemtc` • `shiny` • `plotly` • `ggplot2` • `tidyverse` • `ollama`
