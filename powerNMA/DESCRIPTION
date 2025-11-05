@@ -28,6 +28,7 @@ Imports:
     patchwork,
     shiny (>= 1.7.0),
     shinydashboard,
+    bs4Dash,
     DT,
     plotly,
     readr,
@@ -36,7 +37,16 @@ Imports:
     utils,
     grDevices,
     igraph,
-    jsonlite
+    jsonlite,
+    xml2,
+    DBI,
+    waiter,
+    httr,
+    shinyWidgets,
+    htmlwidgets,
+    MASS,
+    scales,
+    tools
 Suggests:
     gemtc,
     coda,
@@ -62,7 +72,23 @@ Suggests:
     usethis,
     roxygen2 (>= 7.0.0),
     goodpractice,
-    lintr
+    lintr,
+    tm,
+    rstan,
+    rstanarm,
+    plumber,
+    openxlsx,
+    officer,
+    fresh,
+    lme4,
+    xgboost,
+    pool,
+    RPostgres,
+    RSQLite,
+    torch,
+    quantreg,
+    mstate,
+    flexmix
 RoxygenNote: 7.3.1
 Roxygen: list(markdown = TRUE)
 VignetteBuilder: knitr
