@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.httr-oauth
+inst/doc
+*.Rproj
+.DS_Store
+*.log
+powernma_results/
+powernma_plots/
+*.pdf
+*.html
