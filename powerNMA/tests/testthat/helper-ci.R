@@ -1,7 +1,8 @@
 # CI Test Helper Functions
 # =========================
-# This file contains helper functions specifically designed for CI/CD environments
-# to make tests faster, more reliable, and easier to debug.
+# This file contains helper functions specifically designed for
+# CI/CD environments to make tests faster, more reliable, and
+# easier to debug.
 
 # Environment Detection ---------------------------------------------------
 
@@ -147,7 +148,8 @@ skip_if_no_api <- function(api_name = "external API") {
 #'
 #' @param package Character string with package name
 #' @param quietly Logical, whether to suppress all messages (default TRUE in CI)
-#' @param warn_conflicts Logical, whether to warn about conflicts (default FALSE in CI)
+#' @param warn_conflicts Logical, whether to warn about conflicts
+#'   (default FALSE in CI)
 #' @return Logical indicating success
 #' @export
 ci_safe_require <- function(package, quietly = NULL, warn_conflicts = NULL) {
@@ -242,8 +244,16 @@ create_small_test_data <- function(type = "nma",
       if (requireNamespace("tibble", quietly = TRUE)) {
         tibble::tibble(
           studlab = paste0("Study_", seq_len(n_studies)),
-          treat1 = sample(paste0("Trt", 1:n_treatments), n_studies, replace = TRUE),
-          treat2 = sample(paste0("Trt", 1:n_treatments), n_studies, replace = TRUE),
+          treat1 = sample(
+            paste0("Trt", 1:n_treatments),
+            n_studies,
+            replace = TRUE
+          ),
+          treat2 = sample(
+            paste0("Trt", 1:n_treatments),
+            n_studies,
+            replace = TRUE
+          ),
           TE = stats::rnorm(n_studies, mean = -0.3, sd = 0.5),
           seTE = stats::runif(n_studies, min = 0.1, max = 0.3),
           n1 = round(stats::runif(n_studies, 50, 150)),
@@ -252,8 +262,16 @@ create_small_test_data <- function(type = "nma",
       } else {
         data.frame(
           studlab = paste0("Study_", seq_len(n_studies)),
-          treat1 = sample(paste0("Trt", 1:n_treatments), n_studies, replace = TRUE),
-          treat2 = sample(paste0("Trt", 1:n_treatments), n_studies, replace = TRUE),
+          treat1 = sample(
+            paste0("Trt", 1:n_treatments),
+            n_studies,
+            replace = TRUE
+          ),
+          treat2 = sample(
+            paste0("Trt", 1:n_treatments),
+            n_studies,
+            replace = TRUE
+          ),
           TE = stats::rnorm(n_studies, mean = -0.3, sd = 0.5),
           seTE = stats::runif(n_studies, min = 0.1, max = 0.3),
           n1 = round(stats::runif(n_studies, 50, 150)),
@@ -273,7 +291,10 @@ create_small_test_data <- function(type = "nma",
         tibble::tibble(
           trial = rep(paste0("Trial_", 1:n_trials), each = n_per_arm * 2),
           patient_id = paste0("P", seq_len(n_total)),
-          treatment = rep(rep(c("Control", "Active"), each = n_per_arm), n_trials),
+          treatment = rep(
+            rep(c("Control", "Active"), each = n_per_arm),
+            n_trials
+          ),
           time = stats::rexp(n_total, rate = 0.05),
           status = stats::rbinom(n_total, 1, 0.6),
           age = stats::rnorm(n_total, mean = 60, sd = 10),
@@ -283,7 +304,10 @@ create_small_test_data <- function(type = "nma",
         data.frame(
           trial = rep(paste0("Trial_", 1:n_trials), each = n_per_arm * 2),
           patient_id = paste0("P", seq_len(n_total)),
-          treatment = rep(rep(c("Control", "Active"), each = n_per_arm), n_trials),
+          treatment = rep(
+            rep(c("Control", "Active"), each = n_per_arm),
+            n_trials
+          ),
           time = stats::rexp(n_total, rate = 0.05),
           status = stats::rbinom(n_total, 1, 0.6),
           age = stats::rnorm(n_total, mean = 60, sd = 10),
