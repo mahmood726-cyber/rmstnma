@@ -1,11 +1,11 @@
 test_that("Data generation works", {
-  # IPD generation
-  ipd <- generate_example_ipd(n_trials = 2, n_per_arm = 20)
+  # IPD generation using CI helper for faster tests
+  ipd <- create_small_test_data("ipd")
   expect_true(validate_ipd(ipd))
   expect_equal(nrow(ipd), 2 * 20 * 2)
 
-  # NMA data generation
-  nma_data <- simulate_nma_data(n_studies = 5)
+  # NMA data generation using CI helper for faster tests
+  nma_data <- create_small_test_data("nma")
   expect_true(validate_nma_input(nma_data))
   expect_true("studlab" %in% names(nma_data))
   expect_true("TE" %in% names(nma_data))
@@ -41,7 +41,8 @@ test_that("Configuration setup works", {
 })
 
 test_that("Network geometry calculation works", {
-  data <- simulate_nma_data(n_studies = 10)
+  # Use small test data for faster CI execution
+  data <- create_small_test_data("nma")
   geom <- network_geometry(data)
 
   expect_true("n_studies" %in% names(geom))
@@ -53,7 +54,8 @@ test_that("Network geometry calculation works", {
 test_that("RMST NMA runs without error", {
   skip_if_not_installed("survRM2")
 
-  ipd <- generate_example_ipd(n_trials = 3, n_per_arm = 50)
+  # Use small test data for faster CI execution
+  ipd <- create_small_test_data("ipd")
   results <- rmst_nma(ipd, tau_list = c(180, 365), reference = "Control")
 
   expect_s3_class(results, "rmst_nma")
@@ -61,7 +63,8 @@ test_that("RMST NMA runs without error", {
 })
 
 test_that("Milestone NMA runs correctly", {
-  ipd <- generate_example_ipd(n_trials = 3, n_per_arm = 50)
+  # Use small test data for faster CI execution
+  ipd <- create_small_test_data("ipd")
   results <- milestone_nma(ipd, times = c(180), reference = "Control")
 
   expect_s3_class(results, "milestone_nma")
@@ -71,9 +74,10 @@ test_that("Milestone NMA runs correctly", {
 })
 
 test_that("Standard NMA runs", {
-  skip_if_not_installed("netmeta")
+  ci_safe_require("netmeta")  # Quiet package loading in CI
 
-  data <- simulate_nma_data(n_studies = 10)
+  # Use small test data for faster CI execution
+  data <- create_small_test_data("nma")
   results <- run_powernma(
     data,
     data_type = "pairwise",

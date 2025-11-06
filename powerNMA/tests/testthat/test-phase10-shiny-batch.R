@@ -6,8 +6,9 @@
 # - Batch processing
 # - Automated workflows
 
-library(testthat)
-library(powerNMA)
+# Use CI-safe package loading to reduce log noise
+ci_safe_require("testthat")
+ci_safe_require("powerNMA")
 
 # ============================================================================
 # Helper Functions
@@ -16,10 +17,12 @@ library(powerNMA)
 create_mock_batch_datasets <- function(n = 3) {
   datasets <- list()
   for (i in 1:n) {
-    datasets[[paste0("dataset_", i)]] <- simulate_nma_data(
-      n_studies = sample(10:20, 1),
-      n_treatments = sample(4:7, 1),
-      sm = "OR"
+    # Use small test data for faster CI execution
+    datasets[[paste0("dataset_", i)]] <- create_small_test_data(
+      "nma",
+      n_studies = sample(3:6, 1),
+      n_treatments = sample(3:4, 1),
+      seed = 1000 + i
     )
   }
   return(datasets)

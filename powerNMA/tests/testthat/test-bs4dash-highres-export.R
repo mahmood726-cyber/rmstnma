@@ -5,8 +5,9 @@ context("bs4Dash Dashboard with High-Resolution Export")
 
 # Test 1: bs4Dash UI Creation
 test_that("bs4Dash UI creates without errors", {
-  skip_if_not_installed("bs4Dash")
-  skip_if_not_installed("shiny")
+  skip_if_no_display()  # Skip on headless CI environments
+  ci_safe_require("bs4Dash")
+  ci_safe_require("shiny")
 
   # Create UI
   expect_silent({
@@ -19,7 +20,8 @@ test_that("bs4Dash UI creates without errors", {
 
 # Test 2: High-Resolution Download Handler Creation
 test_that("High-resolution download handlers are created correctly", {
-  skip_if_not_installed("shiny")
+  skip_if_no_display()  # Skip on headless CI environments
+  ci_safe_require("shiny")
 
   # Create mock plot function
   mock_plot <- function() {
@@ -56,7 +58,8 @@ test_that("Export configurations are valid", {
 
 # Test 4: bs4Dash Theme Creation
 test_that("bs4Dash themes are created correctly", {
-  skip_if_not_installed("bs4Dash")
+  skip_if_no_display()  # Skip on headless CI environments
+  ci_safe_require("bs4Dash")
 
   # Test different themes
   expect_silent({

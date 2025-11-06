@@ -7,10 +7,10 @@
 #
 
 test_that("Complete standard NMA workflow executes successfully", {
-  skip_if_not_installed("netmeta")
+  ci_safe_require("netmeta")  # Quiet package loading in CI
 
-  # Generate data
-  data <- simulate_nma_data(n_studies = 15, seed = 123)
+  # Generate data - use small test data for faster CI execution
+  data <- create_small_test_data("nma", n_studies = 8, seed = 123)
 
   # Validate data
   expect_true(validate_nma_input(data))
@@ -59,9 +59,10 @@ test_that("Data diagnostics detect and report issues correctly", {
 })
 
 test_that("Export functionality works for all modes", {
-  skip_if_not_installed("netmeta")
+  ci_safe_require("netmeta")  # Quiet package loading in CI
 
-  data <- simulate_nma_data(n_studies = 10, seed = 456)
+  # Use small test data for faster CI execution
+  data <- create_small_test_data("nma", n_studies = 6, seed = 456)
 
   # Test standard mode export
   config_standard <- setup_powernma(

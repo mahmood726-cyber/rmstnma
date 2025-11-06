@@ -4,6 +4,8 @@
 # covering various network structures and scenarios
 
 test_that("Large star network (200 studies, 10 treatments) processes correctly", {
+  skip_if_quick()  # Skip this slow test when QUICK_TESTS=1
+
   set.seed(2001)
 
   # Generate large star network
@@ -39,6 +41,8 @@ test_that("Large star network (200 studies, 10 treatments) processes correctly",
 })
 
 test_that("Complete network (150 studies) handles all comparisons", {
+  skip_if_quick()  # Skip this slow test when QUICK_TESTS=1
+
   set.seed(2002)
 
   complete_data <- simulate_large_complete_network(
