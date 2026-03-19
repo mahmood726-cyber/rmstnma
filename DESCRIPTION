@@ -1,0 +1,40 @@
+Package: rmstnma
+Title: Restricted Mean Survival Time Network Meta-Analysis
+Version: 0.1.0
+Authors@R: 
+    person("Mahmood", "Ahmad", , "mahmood726@gmail.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0001-9107-3704"))
+Description: Implements Bayesian network meta-analysis for restricted mean 
+    survival time (RMST) outcomes. Provides functions for data preparation,
+    model fitting using Stan, diagnostic tools for restriction time selection, 
+    and result visualization. Handles Kaplan-Meier reconstruction uncertainty 
+    and exports results in formats suitable for evidence synthesis.
+License: MIT + file LICENSE
+URL: https://github.com/mahmood726-cyber/rmstnma
+BugReports: https://github.com/mahmood726-cyber/rmstnma/issues
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends: 
+    R (>= 4.1.0)
+Imports:
+    magrittr,
+    dplyr,
+    rlang,
+    checkmate,
+    ggplot2,
+    stats,
+    utils
+Suggests: 
+    cmdstanr (>= 0.5.0),
+    posterior (>= 1.4.0),
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    readr
+Additional_repositories: https://mc-stan.org/r-packages/
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+SystemRequirements: CmdStan (>= 2.33.0)

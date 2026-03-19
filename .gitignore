@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Rprofile
+.httr-oauth
+.DS_Store
+.quarto
+*.Rcheck/
+*.tar.gz
+renv/library/
+renv/staging/
+*.log
+.Rbuildignore

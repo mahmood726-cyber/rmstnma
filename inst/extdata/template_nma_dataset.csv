@@ -1,0 +1,5 @@
+study_id,treatment,time,survival,source,arm_id,n_risk
+STUDY001,Control,0,1,km,A,100
+STUDY001,Treatment A,0,1,km,B,100
+STUDY001,Control,3,0.85,km,A,80
+STUDY001,Treatment A,3,0.90,km,B,82

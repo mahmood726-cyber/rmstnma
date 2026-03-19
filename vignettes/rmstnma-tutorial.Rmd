@@ -1,0 +1,107 @@
+---
+title: "Bayesian RMST Network Meta-Analysis Tutorial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Bayesian RMST Network Meta-Analysis Tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Overview
+
+This tutorial walks through a complete analysis using the `rmstnma` package, 
+from data preparation to results visualization for Bayesian RMST network 
+meta-analysis.
+
+## Prerequisites
+
+You need `rmstnma` and a working installation of **CmdStan**.
+
+```r
+library(rmstnma)
+library(ggplot2)
+```
+
+## 1. Prepare the Network
+
+Start by loading your survival data. We'll use the package's `example_network`.
+
+```{r}
+data(example_network)
+head(example_network)
+
+# Create a network object
+net <- rmst_network(
+  data = example_network,
+  study = "study_id",
+  trt = "treatment",
+  time = "time",
+  surv = "survival"
+)
+
+# Visualize the network structure
+# plot(net, type = "network")
+```
+
+## 2. Fit the Model
+
+We'll fit a Bayesian model using `rmst_nma()`. We specify `tau = 24` months 
+as our restriction time.
+
+```{r, eval=FALSE}
+# Note: Requires CmdStan
+fit <- rmst_nma(
+  network = net,
+  tau = 24,
+  baseline = "rp_spline",
+  chains = 4,
+  iter = 2000
+)
+```
+
+## 3. Examine Results
+
+Once fitted, you can generate various plots to interpret the treatment effects.
+
+### Forest Plot
+Compare treatments against a reference (defaults to the first treatment in the network).
+
+```{r, eval=FALSE}
+plot(fit, type = "forest", reference = "Control")
+```
+
+### Rankogram and SUCRA
+Estimate the probability that each treatment is ranked 1st, 2nd, etc.
+
+```{r, eval=FALSE}
+plot(fit, type = "rank")
+```
+
+### Sensitivity to tau
+RMST depends on the restriction time. It's good practice to fit the model 
+across multiple tau values.
+
+```{r, eval=FALSE}
+fit_multi <- rmst_nma(network = net, tau = c(12, 18, 24, 30, 36))
+plot(fit_multi, type = "rmst")
+```
+
+## 4. Convergence Diagnostics
+
+Always check your MCMC chains for convergence.
+
+```{r, eval=FALSE}
+plot(fit, type = "trace", pars = c("d[2]", "sigma"))
+```
+
+## Conclusion
+
+The `rmstnma` package simplifies the complex process of Bayesian survival NMA, 
+providing a robust and flexible framework for comparative effectiveness research.

@@ -1,0 +1,41 @@
+---
+title: "Getting Started with rmstnma"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with rmstnma}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+The `rmstnma` package provides specialized tools for conducting network meta-analysis 
+with Restricted Mean Survival Time (RMST) as the primary outcome.
+
+## Basic Usage
+
+```{r eval=FALSE}
+library(rmstnma)
+
+# Load example data
+data(example_network)
+head(example_network)
+
+# Create network
+net <- rmst_network(
+  data = example_network,
+  study = "study_id",
+  trt = "treatment",
+  time = "time",
+  surv = "survival"
+)
+
+print(net)
+```

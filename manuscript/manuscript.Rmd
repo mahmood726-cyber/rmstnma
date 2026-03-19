@@ -1,0 +1,226 @@
+---
+title: "Bayesian Network Meta-Analysis of Restricted Mean Survival Time: A Probabilistic Programming Approach"
+author:
+  - name: Mahmood Ahmad
+    affiliation: "Royal Free London NHS Foundation Trust"
+    email: "mahmood726@gmail.com"
+abstract: |
+  **Background:** In clinical trials with time-to-event outcomes, the hazard ratio (HR) is the most commonly reported effect measure. However, the HR relies on the proportional hazards (PH) assumption, which is frequently violated in practice, particularly in immunotherapy and targeted therapy trials where delayed treatment effects or crossing survival curves are common. Restricted Mean Survival Time (RMST) has emerged as a robust, clinically interpretable alternative that does not require the PH assumption. Extending RMST to Network Meta-Analysis (NMA) allows for the simultaneous comparison of multiple treatments while respecting complex evidence structures.
+
+  **Methods:** We present a Bayesian framework for RMST-based NMA implemented in the `rmstnma` R package. The framework utilizes Stan, a state-of-the-art probabilistic programming language, to fit arm-based models with flexible baseline hazard specifications including Royston-Parmar cubic splines and piecewise constant models. The approach propagates uncertainty from Kaplan-Meier curve reconstruction and provides a natural mechanism for estimating treatment rankings and SUCRA scores across multiple restriction times (tau). Convergence is assessed via split-chain Rhat and effective sample size diagnostics.
+
+  **Results:** Using an illustrative network of three studies comparing three treatments, we demonstrate the full analytical pipeline from data preparation through model fitting, diagnostics, and visualization. The Bayesian implementation provides full posterior distributions for RMST at any specified tau, facilitating nuanced probabilistic decision-making. We show that RMST estimates are sensitive to the choice of tau, highlighting the critical importance of pre-specified sensitivity analyses across clinically meaningful time horizons.
+
+  **Conclusions:** The `rmstnma` package provides a comprehensive, open-source toolkit for evidence synthesis of survival data using RMST. By moving beyond the hazard ratio, researchers and health technology assessment bodies can provide more robust and clinically meaningful summaries of treatment effects in a network meta-analysis context, particularly when proportional hazards cannot be assumed.
+
+bibliography: references.bib
+output:
+  html_document:
+    toc: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+# Introduction
+
+## The Limitations of the Hazard Ratio
+
+In clinical trials evaluating time-to-event outcomes, the hazard ratio (HR) has traditionally been the primary measure of treatment effect. The HR quantifies the relative rate of event occurrence between treatment groups under the assumption of proportional hazards (PH). However, the PH assumption is frequently violated in practice, particularly in modern oncology and immunotherapy trials where delayed treatment effects, diminishing effects over time, or crossing survival curves are commonly observed [@uno2014moving; @trinquart2016comparison].
+
+When proportional hazards do not hold, the HR becomes a weighted average of instantaneous hazard ratios across time, and its interpretation becomes ambiguous. A single HR cannot adequately describe the complex temporal dynamics of treatment effects in such settings. This has motivated the search for alternative summary measures that are both clinically interpretable and robust to violations of the PH assumption.
+
+## Restricted Mean Survival Time
+
+Restricted Mean Survival Time (RMST) is defined as the area under the survival curve $S(t)$ from time zero to a specified restriction time $\tau$ [@royston2013restricted]:
+
+$$\text{RMST}(\tau) = \int_{0}^{\tau} S(t) \, dt = E[\min(T, \tau)]$$
+
+where $T$ is the survival time random variable. RMST represents the average time a patient survives during the follow-up window $[0, \tau]$. The difference in RMST between two treatment groups, $\Delta\text{RMST} = \text{RMST}_1(\tau) - \text{RMST}_0(\tau)$, provides an absolute measure of treatment benefit in units of time --- for example, "treatment A provides 2.3 additional months of survival on average over 24 months of follow-up" [@zhao2016restricted].
+
+Unlike the HR, RMST does not require the PH assumption and remains interpretable even when survival curves cross. It has been recommended as a primary or co-primary endpoint by several regulatory and methodological bodies [@uno2014moving].
+
+## Network Meta-Analysis for Survival Outcomes
+
+Network Meta-Analysis (NMA) extends pairwise meta-analysis to compare multiple treatments simultaneously by combining both direct and indirect evidence within a coherent framework [@dias2013evidence; @salanti2012indirect]. While NMA methods for binary outcomes (e.g., odds ratios) and continuous outcomes (e.g., mean differences) are well-established [@borenstein2021introduction; @higgins2019cochrane], NMA for survival data has typically relied on hazard ratios or complex multi-parameter survival models such as fractional polynomials.
+
+RMST-based NMA offers a simpler yet flexible alternative that preserves the interpretability advantages of RMST while enabling the simultaneous comparison of multiple treatments [@wei2015restricted]. However, existing implementations are limited, and a comprehensive, user-friendly software package for RMST NMA has been lacking.
+
+## Aims and Contributions
+
+This paper introduces the `rmstnma` R package [@rcore2024], which provides a fully Bayesian implementation of RMST NMA. The key contributions include:
+
+1. **Flexible baseline hazard modeling** via Royston-Parmar splines and piecewise constant models, avoiding parametric distributional assumptions.
+2. **Full uncertainty propagation** from Kaplan-Meier curve reconstruction through to RMST estimation and treatment ranking.
+3. **Diagnostic tools** for restriction time selection and MCMC convergence assessment.
+4. **Rich visualization** capabilities including forest plots, rankograms, SUCRA curves, and RMST trajectories across $\tau$ values.
+5. **Interoperability** with existing evidence synthesis frameworks, including export to CINeMA-format datasets for confidence assessment.
+
+The package leverages Stan [@carpenter2017stan] via the `cmdstanr` interface [@gabry2019cmdstanr] for robust Hamiltonian Monte Carlo sampling, building on the ecosystem of Bayesian modeling tools in R [@burkner2017brms].
+
+# Methods
+
+## The rmstnma Framework
+
+The `rmstnma` package follows a structured analytical workflow consisting of four stages:
+
+1. **Data Preparation:** Standardizing and validating survival data from multiple studies into a common network structure using the `rmst_network()` function. The package includes a schema-based validation system (`nma_schema()`, `validate_nma_dataset()`) that enforces data integrity constraints.
+2. **Model Fitting:** Bayesian estimation of RMST via `rmst_nma()`, which interfaces with CmdStan for Hamiltonian Monte Carlo sampling. Models can be fit at one or more restriction times simultaneously.
+3. **Diagnostics:** Assessing MCMC convergence via Rhat and effective sample size statistics, and evaluating restriction time sensitivity via `diagnose_tau()` and `select_tau()`.
+4. **Visualization and Export:** Generating forest plots, rankograms, RMST curves across $\tau$ values, and exporting results for further analysis or reporting (`export_cinema()`).
+
+## Bayesian Model Specification
+
+We implement an arm-based model where the survival probability $S_{sk}(t)$ for study $s$ and treatment arm $k$ is modeled using a flexible baseline hazard specification. The restricted mean survival time at restriction time $\tau$ for study $s$ and treatment $k$ is:
+
+$$\text{RMST}_{sk}(\tau) = \int_{0}^{\tau} S_{sk}(t) \, dt$$
+
+We provide two specifications for the baseline hazard:
+
+- **Royston-Parmar splines:** The log cumulative hazard is modeled as a natural cubic spline function of log time, following the approach of Royston and Parmar [@royston2013restricted]. This provides considerable flexibility to capture a wide range of survival curve shapes.
+- **Piecewise constant hazards:** The hazard is assumed constant within pre-specified time intervals. This provides a simpler, non-parametric-like specification.
+
+Treatment effects are modeled on the log hazard scale with study-specific baselines. Between-study heterogeneity in treatment effects is captured through a random-effects structure, with the heterogeneity variance $\tau^2$ estimated from the data [@dersimonian1986meta; @higgins2003measuring]. Consistency of direct and indirect evidence can be assessed within the framework [@lu2006assessing].
+
+## Handling Reconstruction Uncertainty
+
+When individual patient data are not available, survival data must often be reconstructed from published Kaplan-Meier curves using digitization techniques [@guyot2012enhanced]. The `rmstnma` package explicitly accounts for this source of uncertainty through the `recon_opts()` function, which allows users to specify reconstruction parameters that are propagated through the model.
+
+## Treatment Ranking
+
+The Bayesian framework naturally provides posterior probabilities for treatment rankings at each MCMC iteration. From these, we compute:
+
+- **Rank probabilities:** The probability that each treatment achieves each possible rank.
+- **SUCRA scores:** The Surface Under the Cumulative Ranking curve, summarizing the overall ranking of each treatment as a single number between 0 (worst) and 1 (best) [@salanti2012indirect].
+
+These ranking measures can be computed at multiple restriction times to assess how treatment ordering varies with follow-up duration.
+
+# Illustrative Example
+
+We demonstrate the package using the internal `example_network` dataset, which contains reconstructed survival data from three hypothetical studies comparing three treatments (A, B, and C) in a connected network.
+
+## Data Preparation
+
+```{r setup, message=FALSE}
+library(rmstnma)
+library(ggplot2)
+
+# Load the example network
+data(example_network)
+
+# Create the network object
+net <- rmst_network(
+  data = example_network,
+  study = "study_id",
+  trt = "treatment",
+  time = "time",
+  surv = "survival"
+)
+
+# Inspect the network structure
+print(net)
+```
+
+The `rmst_network()` function validates the input data, identifies the network topology, and prepares the data for model fitting. The network structure can be visualized to understand the available direct comparisons between treatments.
+
+```{r network_plot, eval=FALSE}
+# Visualize the network graph
+plot(net)
+```
+
+## Model Fitting
+
+We fit a Bayesian RMST NMA model at three clinically relevant restriction times: 12, 24, and 36 months. The model uses Royston-Parmar splines for the baseline hazard.
+
+```{r fit_model, eval=FALSE}
+# Fit the Bayesian RMST NMA model (requires CmdStan installed)
+fit <- rmst_nma(
+  network = net,
+  tau = c(12, 24, 36),
+  baseline = "rp_spline",
+  chains = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 42
+)
+
+# Summarize the results
+summary(fit)
+```
+
+The model fitting is performed via CmdStan, which uses the No-U-Turn Sampler (NUTS), a variant of Hamiltonian Monte Carlo that adaptively tunes step sizes and trajectory lengths. We recommend running at least 4 chains with 2000 iterations (including 1000 warmup) and checking convergence diagnostics before interpreting results.
+
+## Restriction Time Diagnostics
+
+The choice of restriction time $\tau$ is a critical decision in RMST analysis. If $\tau$ exceeds the maximum observed follow-up time in any study, extrapolation beyond the observed data is required. The `diagnose_tau()` function helps identify appropriate values of $\tau$ by examining the observed follow-up across all studies.
+
+```{r tau_diagnostics, eval=FALSE}
+# Diagnose appropriate restriction times
+tau_diag <- diagnose_tau(net)
+
+# Select tau based on data coverage criteria
+tau_selected <- select_tau(net, coverage = 0.90)
+```
+
+## Results and Visualization
+
+Once the model is fitted, a rich set of visualizations can be produced to communicate results:
+
+```{r results_demo, eval=FALSE}
+# Forest plot of RMST differences at tau = 24 months
+plot(fit, type = "forest", tau = 24)
+
+# Rankogram showing rank probabilities for each treatment
+plot(fit, type = "rank", tau = 24)
+
+# RMST curves showing how treatment effects evolve across tau values
+plot(fit, type = "rmst")
+```
+
+The forest plot presents posterior median RMST differences with 95% credible intervals for all pairwise comparisons. The rankogram displays the posterior probability that each treatment achieves each rank. The RMST trajectory plot reveals how treatment differences change as the restriction time increases, which is particularly informative for understanding the temporal dynamics of treatment effects.
+
+## Export for Evidence Assessment
+
+Results can be exported in formats compatible with downstream evidence assessment tools:
+
+```{r export_demo, eval=FALSE}
+# Export to CINeMA-compatible format
+export_cinema(fit, file = "rmst_cinema_export.csv")
+```
+
+# Discussion
+
+## Summary of Contributions
+
+The `rmstnma` package addresses a key gap in the evidence synthesis toolkit by providing a comprehensive Bayesian framework for RMST-based NMA. By using arm-based models with flexible baseline hazard specifications, it avoids the restrictive assumptions of proportional hazards models that dominate current practice in survival NMA. The implementation in Stan ensures computational reliability and scalability, while the R interface provides accessibility to the broad community of evidence synthesis practitioners.
+
+## Advantages of the RMST Approach
+
+One of the primary advantages of our approach is the clinical interpretability of results. RMST differences are expressed in units of time, making them immediately understandable to clinicians and patients. In contrast, the hazard ratio requires an understanding of instantaneous rates and may convey a misleading impression of constant relative benefit when PH does not hold.
+
+Furthermore, the Bayesian framework allows for the natural quantification of uncertainty and the direct computation of decision-relevant quantities such as the probability that a treatment is best or the probability that an RMST difference exceeds a clinically meaningful threshold.
+
+The ability to evaluate RMST at multiple restriction times provides a richer picture of treatment effects than a single summary measure. This is analogous to examining multiple time points in a milestone analysis but with the added benefit of full posterior distributions and treatment ranking at each time point.
+
+## Handling Uncertainty from Curve Reconstruction
+
+A practical advantage of the `rmstnma` framework is its explicit handling of uncertainty from Kaplan-Meier curve reconstruction [@guyot2012enhanced]. When IPD are not available, digitized survival curves introduce measurement error. Our approach propagates this uncertainty through the Bayesian model, yielding appropriately wider credible intervals that reflect the true state of knowledge.
+
+## Limitations
+
+Several limitations should be acknowledged. First, the computational cost of Bayesian estimation via MCMC is higher than frequentist alternatives such as the DerSimonian-Laird method [@dersimonian1986meta], though modern hardware and Stan's efficient sampler mitigate this concern. Second, the choice of $\tau$ remains a substantive decision that should be pre-specified in the analysis protocol. Third, the current implementation assumes a common heterogeneity variance across treatment comparisons, which may not hold in large networks with diverse comparisons. Fourth, the package currently requires CmdStan as an external dependency, which may present installation challenges for some users.
+
+## Comparison with Existing Software
+
+Existing tools for meta-analysis of survival data include the `metafor` package [@viechtbauer2010metafor] for standard pairwise meta-analysis and various NMA packages that operate on hazard ratios. The `survRM2` package implements RMST comparison for two groups but does not extend to network meta-analysis. Our package fills this gap by providing a dedicated, validated implementation for RMST NMA with a focus on usability and transparency.
+
+## Future Directions
+
+Future development will focus on: (1) incorporating covariate adjustment and meta-regression to explore treatment effect modifiers; (2) implementing node-splitting procedures for formal inconsistency assessment; (3) adding support for multi-arm trials with correlated treatment effects; and (4) developing Shiny-based interactive visualizations for exploring results.
+
+# Conclusions
+
+The `rmstnma` package offers a robust, flexible, and user-friendly approach to network meta-analysis of survival data using restricted mean survival time. By focusing on RMST rather than the hazard ratio, it provides results that are more easily interpretable by clinicians and patients alike, particularly in settings where proportional hazards cannot be assumed. The Bayesian implementation ensures proper uncertainty quantification, while the comprehensive suite of diagnostic and visualization tools supports transparent and reproducible evidence synthesis. The package is freely available at <https://github.com/mahmood726-cyber/rmstnma> and adheres to PRISMA-NMA reporting standards [@page2021prisma; @higgins2019cochrane].
+
+# References
