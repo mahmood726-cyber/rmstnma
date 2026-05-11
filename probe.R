@@ -4,7 +4,9 @@
 # numerical signals from rmst_network(). All signals are deterministic
 # given a fixed dataset.
 #
-# Run: Rscript probe.R
+# Run: Rscript --vanilla probe.R
+# (--vanilla skips .Rprofile / Renviron so renv::activate output does not
+#  pollute stdout that the Overmind numerical witness parses as JSON.)
 
 suppressPackageStartupMessages({
   if (!"rmstnma" %in% loadedNamespaces()) {
