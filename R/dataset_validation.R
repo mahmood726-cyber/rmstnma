@@ -76,7 +76,18 @@ standardize_nma_columns <- function(x, mappings = NULL) {
     }
   }
 
-  dplyr::rename(x, !!!rlang::syms(names(rename_map)) := !!!rlang::syms(unname(rename_map)))
+  if (length(rename_map) == 0) {
+    return(x)
+  }
+
+  # rename_map has names = current (old) column names, values = target (new)
+  # names. dplyr::rename() expects `new_name = old_name`, so build a named list
+  # of symbols keyed by the new name and pointing at the old column.
+  new_for_old <- stats::setNames(
+    rlang::syms(names(rename_map)),
+    unname(rename_map)
+  )
+  dplyr::rename(x, !!!new_for_old)
 }
 
 #' Validate a survival NMA dataset against the schema

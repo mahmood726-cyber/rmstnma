@@ -7,7 +7,7 @@
 #' comparing three treatments. This dataset demonstrates the expected format
 #' for RMST network meta-analysis.
 #'
-#' @format A data frame with 113 rows and 5 columns:
+#' @format A data frame with 112 rows and 5 columns:
 #' \describe{
 #'   \item{study_id}{Character. Study identifier (STUDY001, STUDY002, STUDY003)}
 #'   \item{treatment}{Character. Treatment name (Control, Treatment A, Treatment B)}

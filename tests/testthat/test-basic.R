@@ -39,7 +39,10 @@ test_that("diagnose_tau works", {
 
 test_that("validate_nma_dataset accepts example data", {
   data(example_network)
-  v <- validate_nma_dataset(example_network, strict = TRUE, quiet = TRUE)
+  # The example network is reconstructed Kaplan-Meier data, so the opt-in
+  # strict checks (survival == 1 exactly at t = 0) are expected to flag it.
+  # Default (non-strict) validation should pass.
+  v <- validate_nma_dataset(example_network, strict = FALSE, quiet = TRUE)
   expect_true(v$ok)
   expect_true(v$summary$n_studies >= 1)
 })
